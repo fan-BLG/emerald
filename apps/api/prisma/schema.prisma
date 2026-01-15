@@ -221,7 +221,14 @@ model BattleRound {
   caseItemId            String   @map("case_item_id")
   coinValue             Decimal  @map("coin_value") @db.Decimal(18, 2)
 
+  // Denormalized skin info for quick access
+  skinName              String?  @map("skin_name")
+  skinImage             String?  @map("skin_image")
+  skinRarity            String?  @map("skin_rarity")
+
+  // Provably fair
   nonce                 Int
+  rollHash              String?  @map("roll_hash")
   rollValue             Decimal  @map("roll_value") @db.Decimal(20, 10)
 
   triggeredEmeraldSpin  Boolean  @default(false) @map("triggered_emerald_spin")

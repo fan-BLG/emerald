@@ -7,10 +7,12 @@ import type {
   BattleFinishedEvent,
 } from '@emerald/shared';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
 interface BattleState {
   // List of active battles
   battles: BattleWithDetails[];
-  isLoading: boolean;
+  loading: boolean; // Changed from isLoading for consistency
 
   // Current battle being viewed/played
   currentBattle: BattleWithDetails | null;
@@ -19,6 +21,7 @@ interface BattleState {
   roundResults: BattleRoundResultEvent[];
 
   // Actions
+  fetchBattles: () => Promise<void>;
   setBattles: (battles: BattleWithDetails[]) => void;
   addBattle: (battle: BattleWithDetails) => void;
   removeBattle: (battleId: string) => void;
@@ -37,11 +40,29 @@ interface BattleState {
 
 export const useBattleStore = create<BattleState>((set, get) => ({
   battles: [],
-  isLoading: false,
+  loading: false,
   currentBattle: null,
   currentRound: 0,
   countdown: null,
   roundResults: [],
+
+  fetchBattles: async () => {
+    set({ loading: true });
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/battles`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (data.success && data.data) {
+        set({ battles: data.data.battles || data.data });
+      }
+    } catch (error) {
+      console.error('Failed to fetch battles:', error);
+    } finally {
+      set({ loading: false });
+    }
+  },
 
   setBattles: (battles) => set({ battles }),
 
@@ -66,7 +87,7 @@ export const useBattleStore = create<BattleState>((set, get) => ({
     });
   },
 
-  setLoading: (loading) => set({ isLoading: loading }),
+  setLoading: (isLoading) => set({ loading: isLoading }),
 
   handlePlayerJoined: (data) => {
     set((state) => {
