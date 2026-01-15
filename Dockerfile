@@ -6,40 +6,39 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy workspace files
+# Copy workspace files first (for better caching)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
-COPY packages/shared ./packages/shared
-COPY apps/api ./apps/api
+COPY packages/shared/package.json ./packages/shared/
+COPY apps/api/package.json ./apps/api/
 
 # Install dependencies
 RUN pnpm install --frozen-lockfile
 
-# Generate Prisma client
-WORKDIR /app/apps/api
-RUN pnpm run db:generate
+# Copy source files
+COPY packages/shared ./packages/shared
+COPY apps/api ./apps/api
 
 # Build shared package
 WORKDIR /app/packages/shared
 RUN pnpm run build 2>/dev/null || true
 
-# Build API
+# Generate Prisma client and build API
 WORKDIR /app/apps/api
-RUN pnpm run build
+RUN pnpm run db:generate && pnpm run build
 
 # Production stage
 FROM node:20-alpine AS runner
 
+# Install pnpm for db:push
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy necessary files
-COPY --from=builder /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/package.json ./
+# Copy built files and dependencies
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/packages/shared ./packages/shared
 COPY --from=builder /app/apps/api ./apps/api
-
-# Install production dependencies only
-RUN pnpm install --frozen-lockfile --prod
+COPY --from=builder /app/pnpm-lock.yaml /app/pnpm-workspace.yaml /app/package.json ./
 
 # Set environment
 ENV NODE_ENV=production
@@ -49,4 +48,5 @@ EXPOSE 4000
 
 WORKDIR /app/apps/api
 
-CMD ["node", "dist/index.js"]
+# Run db:push to sync schema, then start server
+CMD ["sh", "-c", "pnpm run db:push && node dist/index.js"]

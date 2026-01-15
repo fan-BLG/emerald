@@ -52,9 +52,7 @@ Redis bruges til caching og rate limiting. Kan springes over til start.
 1. Gå til [railway.app](https://railway.app) og login med GitHub
 2. Klik **"New Project"** → **"Deploy from GitHub repo"**
 3. Vælg dit `emerald` repository
-4. **VIGTIGT**: Under "Configure" sæt:
-   - **Root Directory**: `apps/api`
-   - **Watch Paths**: `/apps/api/**`, `/packages/shared/**`
+4. **VIGTIGT**: Lad **Root Directory** være tom (blank) - Dockerfile i root håndterer alt
 
 ### 3.2 Tilføj Environment Variables
 
@@ -161,8 +159,8 @@ Railway vil automatisk redeploy.
 ### Railway build fejler
 
 **Mulige årsager**:
-1. **Root Directory** ikke sat til `apps/api`
-2. Prisma schema fejl - tjek `prisma/schema.prisma`
+1. **Root Directory** er sat - den skal være tom/blank
+2. Prisma schema fejl - tjek `apps/api/prisma/schema.prisma`
 3. TypeScript fejl - kør `pnpm run build` lokalt først
 
 ### Socket.IO forbindelse fejler
@@ -239,7 +237,7 @@ cd apps/web && pnpm run dev
 - [ ] DATABASE_URL kopieret
 - [ ] JWT_SECRET genereret (64+ chars)
 - [ ] Steam API key hentet
-- [ ] Railway projekt oprettet med root `apps/api`
+- [ ] Railway projekt oprettet (Root Directory tom!)
 - [ ] Alle Railway env vars sat
 - [ ] Railway deployed og health check OK
 - [ ] Vercel projekt oprettet med root `apps/web`
