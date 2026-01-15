@@ -15,9 +15,9 @@ COPY . .
 # Install dependencies (no postinstall now)
 RUN pnpm install --frozen-lockfile
 
-# Build shared package
+# Build shared package first (required by API)
 WORKDIR /app/packages/shared
-RUN pnpm run build 2>/dev/null || true
+RUN pnpm run build
 
 # Generate Prisma and build API
 WORKDIR /app/apps/api
