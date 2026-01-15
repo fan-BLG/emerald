@@ -152,7 +152,7 @@ export async function leaderboardRoutes(fastify: FastifyInstance) {
       const dailyWagered = await prisma.battle.aggregate({
         where: {
           status: 'finished',
-          updatedAt: { gte: startOfDay },
+          finishedAt: { gte: startOfDay },
         },
         _sum: { totalValue: true },
       });
