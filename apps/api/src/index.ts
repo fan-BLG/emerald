@@ -22,38 +22,52 @@ import { affiliateRoutes } from './routes/affiliate.js';
 // Import socket handlers
 import { setupSocketHandlers } from './socket/index.js';
 
-// Initialize Prisma
-export const prisma = new PrismaClient();
+// Validate required environment variables
+const requiredEnvVars = ['DATABASE_URL', 'JWT_SECRET', 'FRONTEND_URL'];
+const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
+if (missingEnvVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingEnvVars.join(', ')}`);
+  console.error('Please set these in your Railway/deployment environment.');
+  process.exit(1);
+}
+
+// Initialize Prisma with connection retry
+export const prisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+});
 
 // Initialize Fastify
 const fastify = Fastify({
   logger: true,
+  trustProxy: true, // Required for Railway/Vercel
 });
 
 // Create HTTP server for Socket.IO
 const httpServer = createServer(fastify.server);
 
-// Initialize Socket.IO
+// Initialize Socket.IO with polling fallback for Railway
 export const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL,
     methods: ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket'],
+  transports: ['websocket', 'polling'], // Polling fallback for environments that block WS
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 // Register plugins
 async function registerPlugins() {
   // CORS
   await fastify.register(cors, {
-    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+    origin: process.env.FRONTEND_URL,
     credentials: true,
   });
 
-  // JWT
+  // JWT (JWT_SECRET is validated at startup)
   await fastify.register(jwt, {
-    secret: process.env.JWT_SECRET || 'emerald-super-secret-key-change-in-production',
+    secret: process.env.JWT_SECRET!,
   });
 
   // Rate limiting
@@ -95,6 +109,11 @@ fastify.decorate('authenticate', async function (request: any, reply: any) {
 // Start server
 async function start() {
   try {
+    // Test database connection
+    console.log('🔄 Connecting to database...');
+    await prisma.$connect();
+    console.log('✅ Database connected');
+
     await registerPlugins();
     await registerRoutes();
     setupSocketHandlers(io);
@@ -108,9 +127,12 @@ async function start() {
     httpServer.listen(port, host, () => {
       console.log(`🚀 Emerald API running on http://${host}:${port}`);
       console.log(`🔌 Socket.IO ready`);
+      console.log(`📍 CORS origin: ${process.env.FRONTEND_URL}`);
     });
   } catch (err) {
+    console.error('❌ Failed to start server:', err);
     fastify.log.error(err);
+    await prisma.$disconnect();
     process.exit(1);
   }
 }

@@ -1,0 +1,17 @@
+# Railway Nixpacks configuration for Emerald API
+[phases.setup]
+nixPkgs = ["nodejs_20", "pnpm"]
+
+[phases.install]
+cmds = [
+  "cd ../.. && pnpm install --frozen-lockfile",
+  "pnpm run db:generate"
+]
+
+[phases.build]
+cmds = [
+  "pnpm run build"
+]
+
+[start]
+cmd = "pnpm run db:push && pnpm run start"
