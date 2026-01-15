@@ -4,7 +4,8 @@ import jwt from '@fastify/jwt';
 import rateLimit from '@fastify/rate-limit';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
-import { PrismaClient } from '@prisma/client';
+import pkg from '@prisma/client';
+const { PrismaClient } = pkg;
 import type { ServerToClientEvents, ClientToServerEvents } from '@emerald/shared';
 
 // Import routes
