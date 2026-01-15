@@ -388,6 +388,7 @@ model CoinflipGame {
 
   creatorSide     String   @map("creator_side") // heads/tails
   amount          Decimal  @db.Decimal(18, 2)
+  isVsBot         Boolean  @default(false) @map("is_vs_bot") // true = vs bot (2% edge), false = PVP (0% edge)
 
   status          String   @default("waiting") // waiting/in_progress/finished/cancelled
   winnerId        String?  @map("winner_id")

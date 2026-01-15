@@ -2,13 +2,43 @@ import crypto from 'crypto';
 import { prisma, io } from '../index.js';
 import { generateResult, generateServerSeed, hashServerSeed } from './provablyFair.js';
 
-const HOUSE_EDGE = 0.05; // 5% house edge
+// House edges
+const PVP_HOUSE_EDGE = 0; // 0% for player vs player
+const BOT_HOUSE_EDGE = 0.02; // 2% for player vs bot
+
+// Bot configuration
+const BOT_NAMES = [
+  'EmeraldBot', 'LuckyFlip', 'CoinMaster', 'FlipKing', 'GreenGambler',
+  'DiamondFlip', 'GoldCoin', 'SilverSpin', 'CryptoFlip', 'ProGambler'
+];
+
+const BOT_AVATARS = [
+  'https://api.dicebear.com/7.x/bottts/svg?seed=bot1',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=bot2',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=bot3',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=bot4',
+  'https://api.dicebear.com/7.x/bottts/svg?seed=bot5',
+];
+
+// Bot user object (not a real user in DB)
+function generateBotUser() {
+  const name = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+  const avatar = BOT_AVATARS[Math.floor(Math.random() * BOT_AVATARS.length)];
+  return {
+    id: `bot_${crypto.randomBytes(8).toString('hex')}`,
+    username: name,
+    avatarUrl: avatar,
+    level: Math.floor(Math.random() * 50) + 10,
+    vipTier: 'bronze' as const,
+    isBot: true,
+  };
+}
 
 export class CoinflipService {
   /**
    * Creates a new coinflip game
    */
-  async createGame(userId: string, side: 'heads' | 'tails', amount: number) {
+  async createGame(userId: string, side: 'heads' | 'tails', amount: number, vsBot: boolean = false) {
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -42,11 +72,11 @@ export class CoinflipService {
       await tx.transaction.create({
         data: {
           userId,
-          type: 'case_open', // Reusing existing type for coinflip
+          type: 'case_open',
           amount: -amount,
           referenceType: 'coinflip',
           status: 'pending',
-          description: 'Coinflip bet',
+          description: vsBot ? 'Coinflip bet vs bot' : 'Coinflip bet',
         },
       });
 
@@ -59,6 +89,7 @@ export class CoinflipService {
           serverSeed,
           serverSeedHash,
           clientSeed: user.clientSeed,
+          isVsBot: vsBot,
         },
         include: {
           creator: {
@@ -82,7 +113,12 @@ export class CoinflipService {
       reason: 'coinflip_bet',
     });
 
-    // Emit game created
+    // If vs bot, immediately execute the flip
+    if (vsBot) {
+      return this.executeVsBotFlip(game, user);
+    }
+
+    // Emit game created for PVP
     io.emit('coinflip:created', {
       game: {
         ...game,
@@ -91,6 +127,7 @@ export class CoinflipService {
         opponent: null,
         winner: null,
         winnerSide: null,
+        isVsBot: false,
       },
     });
 
@@ -98,7 +135,141 @@ export class CoinflipService {
   }
 
   /**
-   * Join an existing coinflip game
+   * Execute a flip against a bot
+   */
+  private async executeVsBotFlip(game: any, user: any) {
+    const amount = Number(game.amount);
+    const botUser = generateBotUser();
+
+    // Generate result
+    const rollResult = generateResult(game.serverSeed, Date.now().toString(), user.clientSeed || 'default', 0);
+
+    // Determine winner: < 0.5 = heads, >= 0.5 = tails
+    const winnerSide = rollResult.rollValue < 0.5 ? 'heads' : 'tails';
+    const playerWon = winnerSide === game.creatorSide;
+
+    // Calculate payout with bot house edge (2%)
+    const totalPot = amount * 2;
+    const houseCut = totalPot * BOT_HOUSE_EDGE;
+    const payout = playerWon ? (totalPot - houseCut) : 0;
+
+    // Update game and handle payout
+    const result = await prisma.$transaction(async (tx) => {
+      // Update game
+      const updatedGame = await tx.coinflipGame.update({
+        where: { id: game.id },
+        data: {
+          opponentId: null, // Bot has no real user ID
+          status: 'finished',
+          winnerId: playerWon ? game.creatorId : null,
+          winnerSide,
+          rollValue: rollResult.rollValue,
+          finishedAt: new Date(),
+        },
+        include: {
+          creator: {
+            select: { id: true, username: true, avatarUrl: true, level: true, vipTier: true },
+          },
+        },
+      });
+
+      if (playerWon) {
+        // Credit winner
+        await tx.user.update({
+          where: { id: game.creatorId },
+          data: {
+            balance: { increment: payout },
+            totalWon: { increment: payout },
+          },
+        });
+
+        // Create win transaction
+        await tx.transaction.create({
+          data: {
+            userId: game.creatorId,
+            type: 'case_win',
+            amount: payout,
+            referenceType: 'coinflip',
+            referenceId: game.id,
+            status: 'completed',
+            description: 'Coinflip win vs bot',
+          },
+        });
+      }
+
+      // Mark bet transaction as completed
+      await tx.transaction.updateMany({
+        where: {
+          referenceType: 'coinflip',
+          referenceId: game.id,
+          type: 'case_open',
+        },
+        data: { status: 'completed' },
+      });
+
+      return { game: updatedGame, winnerSide, rollValue: rollResult.rollValue, payout, botUser };
+    });
+
+    // Emit balance update
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: game.creatorId },
+      select: { balance: true },
+    });
+
+    io.to(`user:${game.creatorId}`).emit('user:balanceUpdate', {
+      balance: Number(updatedUser?.balance || 0),
+      change: playerWon ? payout - amount : -amount,
+      reason: 'coinflip_result',
+    });
+
+    // Emit game created with bot opponent
+    io.emit('coinflip:created', {
+      game: {
+        ...result.game,
+        amount: Number(result.game.amount),
+        rollValue: null,
+        opponent: botUser,
+        winner: null,
+        winnerSide: null,
+        isVsBot: true,
+      },
+    });
+
+    // Emit result after short delay for animation
+    setTimeout(() => {
+      io.emit('coinflip:result', {
+        gameId: game.id,
+        winnerSide: result.winnerSide,
+        winnerId: playerWon ? game.creatorId : botUser.id,
+        winnerUsername: playerWon ? result.game.creator.username : botUser.username,
+        rollValue: result.rollValue,
+        serverSeed: game.serverSeed,
+        isVsBot: true,
+      });
+
+      // Emit big win if significant
+      if (result.payout >= 100) {
+        io.emit('global:bigWin', {
+          odId: game.creatorId,
+          username: result.game.creator.username,
+          game: 'coinflip',
+          item: { name: 'Coinflip vs Bot', value: result.payout },
+          multiplier: 2 * (1 - BOT_HOUSE_EDGE),
+        } as any);
+      }
+    }, 3000);
+
+    return {
+      ...result.game,
+      opponent: botUser,
+      winner: playerWon ? result.game.creator : botUser,
+      winnerSide: result.winnerSide,
+      isVsBot: true,
+    };
+  }
+
+  /**
+   * Join an existing coinflip game (PVP - 0% house edge)
    */
   async joinGame(userId: string, gameId: string) {
     // Get game
@@ -123,6 +294,10 @@ export class CoinflipService {
       throw new Error('Cannot join your own game');
     }
 
+    if ((game as any).isVsBot) {
+      throw new Error('Cannot join a bot game');
+    }
+
     // Get opponent user
     const opponent = await prisma.user.findUnique({
       where: { id: userId },
@@ -138,7 +313,7 @@ export class CoinflipService {
       throw new Error('Insufficient balance');
     }
 
-    // Join game and execute flip
+    // Join game and execute flip - PVP has 0% house edge!
     const result = await prisma.$transaction(async (tx) => {
       // Deduct opponent balance
       await tx.user.update({
@@ -170,10 +345,8 @@ export class CoinflipService {
       const winnerSide = rollResult.rollValue < 0.5 ? 'heads' : 'tails';
       const winnerId = winnerSide === game.creatorSide ? game.creatorId : userId;
 
-      // Calculate payout (total pot minus house edge)
-      const totalPot = amount * 2;
-      const houseCut = totalPot * HOUSE_EDGE;
-      const payout = totalPot - houseCut;
+      // PVP: 0% house edge - winner takes all!
+      const payout = amount * 2;
 
       // Update game
       const updatedGame = await tx.coinflipGame.update({
@@ -260,8 +433,10 @@ export class CoinflipService {
         gameId,
         winnerSide: result.winnerSide,
         winnerId: result.game.winnerId!,
+        winnerUsername: result.game.winner!.username,
         rollValue: result.rollValue,
-        serverSeed: game.serverSeed, // Reveal server seed
+        serverSeed: game.serverSeed,
+        isVsBot: false,
       });
 
       // Emit big win if significant
@@ -271,10 +446,10 @@ export class CoinflipService {
           username: result.game.winner!.username,
           game: 'coinflip',
           item: { name: 'Coinflip', value: result.payout },
-          multiplier: 2 - HOUSE_EDGE,
+          multiplier: 2, // No house edge for PVP
         } as any);
       }
-    }, 3000); // 3 second delay for flip animation
+    }, 3000);
 
     return result.game;
   }

@@ -122,6 +122,7 @@ export const coinflipSideSchema = z.enum(['heads', 'tails']);
 export const createCoinflipSchema = z.object({
   side: coinflipSideSchema,
   amount: z.number().min(0.10).max(100000),
+  vsBot: z.boolean().default(false), // true = play vs bot (2% edge), false = PVP (0% edge)
 });
 
 export const joinCoinflipSchema = z.object({

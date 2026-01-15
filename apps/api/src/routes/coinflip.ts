@@ -59,12 +59,17 @@ export const coinflipRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const game = await coinflipService.createGame(userId, parseResult.data.side, parseResult.data.amount);
+      const game = await coinflipService.createGame(
+        userId,
+        parseResult.data.side,
+        parseResult.data.amount,
+        parseResult.data.vsBot
+      );
       return {
         success: true,
         data: {
           ...game,
-          amount: Number(game.amount),
+          amount: Number((game as any).amount),
         },
       };
     } catch (error: any) {

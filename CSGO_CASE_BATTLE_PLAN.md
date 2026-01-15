@@ -24,7 +24,7 @@ Dette dokument beskriver den komplette plan for at bygge en CS2 skin gambling pl
 |----------|---------|-----------|
 | CSGOEmpire | Størst, mest troværdig, bred spilleportefølje | Mindre fokus på case battles |
 | Rain.gg | Bedste case battles, crazy mode, jackpot | Nyere, mindre etableret |
-| DatDrop | Battle Royale (72 spillere), custom battles | UI kunne være bedre |
+| DatDrop | Custom battles, god brugeroplevelse | UI kunne være bedre |
 | CSGORoll | Stor skinportefølje, god VIP | Case battles ikke hovedfokus |
 | Clash.gg | Custom battle setups | Mindre brugerbase |
 
@@ -1280,13 +1280,7 @@ CLIENT-SIDE VERIFICATION UI:
 - Spiller med 60% af værdien har 60% chance for at vinde alt
 - Tilføjer ekstra spænding
 
-#### 3.1.5 Battle Royale (72+ spillere)
-- Tournament-style elimination
-- Flere runder med eliminering
-- Safe Mode vs Risky Mode
-- Kæmpe prizepools
-
-#### 3.1.6 🆕 Emerald Exclusive Modes
+#### 3.1.5 🆕 Emerald Exclusive Modes
 
 **Cursed Mode:**
 - Random cases byttes mellem spillere efter hver runde
@@ -1755,13 +1749,7 @@ VERIFICATION (efter spil):
 - Animated 3D åbninger
 - House edge: 8-15% (afhængig af case)
 
-### 4.5 Upgrader
-
-- Risk nuværende item for chance til bedre
-- Slider til at justere odds vs. potential
-- Mulighed for at upgrade alt fra inventory
-
-### 4.6 Match Betting (Senere fase)
+### 4.5 Match Betting (Senere fase)
 
 - Bet på CS2 esports kampe
 - Live odds
@@ -3054,7 +3042,6 @@ GAMES:
 ├── [ ] Roulette
 ├── [ ] Coinflip
 ├── [ ] Crash
-├── [ ] Upgrader
 └── [ ] Mines (optional)
 ```
 
@@ -3071,7 +3058,6 @@ LAUNCH:
 └── [ ] Full launch
 
 POST-LAUNCH:
-├── [ ] Battle Royale mode
 ├── [ ] Match betting
 ├── [ ] Mobile app
 ├── [ ] Additional games

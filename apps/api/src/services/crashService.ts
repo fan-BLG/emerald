@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { prisma, io } from '../index.js';
 import { generateResult, generateServerSeed, hashServerSeed, getEOSBlockHash } from './provablyFair.js';
 
-const HOUSE_EDGE = 0.04; // 4% house edge
+const HOUSE_EDGE = 0.08; // 8% house edge
 const BETTING_DURATION = 10000; // 10 seconds for betting
 const TICK_INTERVAL = 100; // Update multiplier every 100ms
 const MAX_MULTIPLIER = 1000; // Maximum crash point
@@ -90,13 +90,15 @@ export class CrashService {
     // Take first 8 hex chars and convert to number
     const h = parseInt(hash.substring(0, 8), 16);
 
-    // Calculate crash point with house edge
-    // Formula ensures ~4% house edge
+    // Calculate crash point with 8% house edge
+    // Formula: (100 * e - h) / (e - h) with adjustment for house edge
+    // ~8% of games will crash at 1.00x (instant crash)
     const e = Math.pow(2, 32);
-    const result = Math.floor((100 * e - h) / (e - h)) / 100;
+    const houseEdgeMultiplier = 1 - HOUSE_EDGE; // 0.92 for 8% edge
+    const result = Math.floor((100 * e - h) / (e - h) * houseEdgeMultiplier) / 100;
 
-    // Cap at max multiplier
-    return Math.min(result, MAX_MULTIPLIER);
+    // Minimum crash at 1.00x, cap at max multiplier
+    return Math.max(1.00, Math.min(result, MAX_MULTIPLIER));
   }
 
   /**
