@@ -1,33 +1,35 @@
 # Build stage
 FROM node:20-alpine AS builder
 
+# Install openssl for Prisma
+RUN apk add --no-cache openssl openssl-dev
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy workspace files first (for better caching)
+# Copy all source files (needed for postinstall prisma generate)
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
-COPY packages/shared/package.json ./packages/shared/
-COPY apps/api/package.json ./apps/api/
-
-# Install dependencies
-RUN pnpm install --frozen-lockfile
-
-# Copy source files
 COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
+
+# Install dependencies (postinstall will run prisma generate)
+RUN pnpm install --frozen-lockfile
 
 # Build shared package
 WORKDIR /app/packages/shared
 RUN pnpm run build 2>/dev/null || true
 
-# Generate Prisma client and build API
+# Build API
 WORKDIR /app/apps/api
-RUN pnpm run db:generate && pnpm run build
+RUN pnpm run build
 
 # Production stage
 FROM node:20-alpine AS runner
+
+# Install openssl for Prisma runtime
+RUN apk add --no-cache openssl
 
 # Install pnpm for db:push
 RUN corepack enable && corepack prepare pnpm@latest --activate
