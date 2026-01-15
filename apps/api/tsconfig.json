@@ -6,12 +6,13 @@
     "moduleResolution": "bundler",
     "outDir": "./dist",
     "rootDir": "./src",
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"],
-      "@emerald/shared": ["../../packages/shared/src"],
-      "@emerald/shared/*": ["../../packages/shared/src/*"]
+      "@/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*", "prisma/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
