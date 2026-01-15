@@ -32,6 +32,11 @@ model User {
   emeraldSpinEnabled  Boolean  @default(true) @map("emerald_spin_enabled")
   clientSeed          String?  @map("client_seed")
 
+  // Affiliate System
+  affiliateCode       String?  @unique @map("affiliate_code")
+  affiliateEarnings   Decimal  @default(0) @map("affiliate_earnings") @db.Decimal(18, 2)
+  referredBy          String?  @map("referred_by")
+
   // Security
   isBanned            Boolean  @default(false) @map("is_banned")
   banReason           String?  @map("ban_reason")
