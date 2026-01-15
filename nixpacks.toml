@@ -4,9 +4,5 @@ nixPkgs = ["nodejs_20", "pnpm"]
 [phases.install]
 cmds = ["pnpm install"]
 
-[phases.build]
-cmds = ["cd apps/api && pnpm run db:generate"]
-
 [start]
-# Railway deploy trigger
 cmd = "cd apps/api && pnpm run start"
