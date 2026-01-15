@@ -36,24 +36,12 @@ Dette dokument beskriver den komplette plan for at bygge en CS2 skin gambling pl
 4. **Bedste Odds** - Lavere house edge på case battles (5-6%)
 5. **Instant Withdrawals** - Hurtigste skin udbetalinger i branchen
 
-### 1.3 Juridisk Struktur
+### 1.3 Projektfase
 
-**Licens (Prioriteret rækkefølge):**
-1. **Curacao Gaming License (Anbefalet til start)**
-   - Pris: ~€47,000/år (B2C)
-   - Setup: €20,000-50,000
-   - Tidslinje: 2-3 måneder
-   - Dækker alle gambling typer
+> **NOTE:** Dette projekt starter som privat/closed beta. Juridisk struktur og licensering håndteres i en senere fase når platformen er klar til offentlig launch.
 
-2. **Malta Gaming Authority (Senere)**
-   - Højere prestige
-   - Dyrere (~€25,000 setup + højere skatter)
-   - Bedre for EU marked
-
-**Virksomhedsstruktur:**
-- Holding selskab (offshore)
-- Operationelt selskab i Curacao
-- Teknisk selskab (kan være EU-baseret)
+**Fase 1 (Nu):** Privat udvikling, ingen licens påkrævet
+**Fase 2 (Senere):** Curacao Gaming License (~€47,000/år) når vi går public
 
 ---
 
@@ -79,12 +67,15 @@ Backend:
 ├── Search: Elasticsearch (skins katalog)
 └── Real-time: Socket.IO
 
-Infrastructure:
-├── Cloud: AWS / Google Cloud
-├── CDN: Cloudflare
-├── Containers: Docker + Kubernetes
-├── CI/CD: GitHub Actions
-└── Monitoring: Datadog / Grafana
+Infrastructure (LOW COST):
+├── Cloud: Hetzner / DigitalOcean (IKKE AWS - for dyrt)
+│   ├── Hetzner CX31: €10/måned (4 vCPU, 8GB RAM)
+│   ├── Hetzner CX41: €18/måned (8 vCPU, 16GB RAM)
+│   └── Database: Hetzner managed PostgreSQL ~€15/måned
+├── CDN: Cloudflare (gratis tier)
+├── Containers: Docker Compose (ikke K8s til start)
+├── CI/CD: GitHub Actions (gratis)
+└── Monitoring: Grafana Cloud (gratis tier) / Uptime Robot
 
 Blockchain/Provably Fair:
 ├── Hash: SHA-256
@@ -243,6 +234,73 @@ seeds (
 **Mystery Battle:**
 - Cases er skjulte indtil battle starter
 - Ingen ved hvad de åbner
+
+#### 3.1.7 🎲 "CREATE A BATTLE FOR ME" (UNIK FEATURE - INGEN ANDRE HAR DETTE!)
+
+> **Dette er vores killer feature** - En random battle generator som ingen konkurrenter har!
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│           🎲 CREATE A BATTLE FOR ME                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  Bruger vælger kun 2 ting:                                  │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  💰 Total Battle Pris:  [$____] (min $5, max $1000) │   │
+│  │                                                      │   │
+│  │  📦 Minimum Antal Cases: [___] (1-20)               │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+│              [ 🎲 SURPRISE ME! ]                            │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│  SYSTEMET GENERERER RANDOM:                                 │
+│                                                             │
+│  • Battle Mode (Standard/Crazy/Jackpot/Team/Cursed/etc)    │
+│  • Antal spillere (1v1, 1v1v1, 2v2, etc)                   │
+│  • Hvilke cases (mix af forskellige)                       │
+│  • Antal runder (baseret på min cases + budget)            │
+│  • Special modifiers (Mystery cases, Progressive, etc)     │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+ALGORITME:
+1. Tag brugerens budget og min antal cases
+2. Vælg random battle mode fra pulje
+3. Vælg random antal spillere (passende til mode)
+4. Fordel budget på X antal cases (min = brugerens valg)
+5. Tilføj random modifiers (20% chance for special)
+6. Opret battle og vis preview til bruger
+7. Bruger kan "Reroll" eller "Create Battle"
+
+EKSEMPEL OUTPUT:
+┌─────────────────────────────────────────────────────┐
+│  🎲 DIN RANDOM BATTLE:                              │
+│                                                     │
+│  Mode: CRAZY MODE (laveste vinder!)                 │
+│  Format: 1v1v1v1 (4 spillere)                       │
+│  Cases: 7 cases                                     │
+│  Total: $50                                         │
+│                                                     │
+│  Cases:                                             │
+│  [Danger Zone $3] [Clutch $5] [Dreams $8]          │
+│  [Prisma $4] [Horizon $12] [Phoenix $10]           │
+│  [Danger Zone $8]                                   │
+│                                                     │
+│  Special: 🔮 Mystery (cases afsløres ved start)    │
+│                                                     │
+│  [ 🔄 Reroll ]  [ ✅ Create Battle ]               │
+└─────────────────────────────────────────────────────┘
+
+HVORFOR DETTE ER GENIALT:
+├── Ingen andre sites har dette
+├── Reducerer "analysis paralysis" for nye brugere
+├── Skaber variation og overraskelse
+├── Øger engagement (folk vil se hvad de får)
+├── Perfekt til streamers ("random battle challenge")
+└── Let at implementere (random selection fra arrays)
+```
 
 ### 3.2 Custom Case Creator (KERNE FEATURE)
 
@@ -443,51 +501,54 @@ VERIFICATION (efter spil):
 
 ## Del 5: Økonomi & Betalinger
 
-### 5.1 Indbetalingsmetoder
+> **VIGTIGT:** Vi starter KUN med crypto deposits. Skin deposits kommer i senere fase.
+
+### 5.1 Indbetalingsmetoder (Fase 1: Kun Crypto)
 
 ```
-CRYPTO (Prioritet 1 - Laveste fees):
+CRYPTO VIA NOWPAYMENTS (0.5% fee):
 ├── Bitcoin (BTC)
 ├── Ethereum (ETH)
 ├── Litecoin (LTC)
-├── USDT (Tether)
+├── USDT (Tether) ← Anbefalet for brugere
 ├── USDC
 ├── Dogecoin (DOGE)
 ├── Tron (TRX)
-└── BNB
+└── 300+ andre coins supported
 
-SKINS (Prioritet 2 - Kerneprodukt):
-├── CS2 Skins (via Steam Trade)
-├── Instant skin værdiansættelse
-└── 0% deposit fee (konkurrencefordel)
-
-FIAT (Prioritet 3 - Via payment processor):
-├── Visa / Mastercard
-├── Apple Pay / Google Pay
-├── Bank Transfer
-└── PIX (Brasilien)
-├── Boleto (Brasilien)
-└── Lokal payment methods
+NOWPAYMENTS INTEGRATION:
+├── API: https://nowpayments.io/
+├── Fee: 0.5% per transaktion
+├── Non-custodial (vi kontrollerer funds)
+├── Instant payment notifications (IPN)
+├── Auto-conversion til USDT/USD muligt
+└── Node.js SDK tilgængelig
 ```
+
+**INGEN skin deposits til start** - kommer i senere fase.
 
 ### 5.2 Udbetalingsmetoder
 
 ```
-SKINS:
-├── Instant withdrawal til Steam
-├── P2P Marketplace
-├── 0-3% withdrawal fee
-└── Trade bot network
+SKINS VIA WAXPEER API:
+├── Integration: https://docs.waxpeer.com/
+├── NPM package: npm install waxpeer
+├── Bruger vælger skins fra Waxpeer marketplace
+├── Vi betaler med crypto → Waxpeer sender skin
+├── Kræver Steam access token (refresh hver 24 timer)
+└── Websocket for real-time trade status
 
-CRYPTO:
-├── Alle supported cryptocurrencies
-├── 0-1% fee
-└── Automatisk processing
+WAXPEER FLOW:
+1. Bruger anmoder withdrawal (vælger skin på Waxpeer)
+2. Vi sender API request med skin_id + brugerens trade link
+3. Waxpeer sender trade offer til bruger
+4. Vi får callback når trade er gennemført
+5. Balance trækkes fra brugerens konto
 
-FIAT (KYC påkrævet):
-├── Bank transfer
-├── Crypto → Fiat gateways
-└── 2-5% fee
+CRYPTO WITHDRAWAL (alternativ):
+├── Direkte crypto udbetaling
+├── Via NOWPayments payout API
+└── 0-1% fee
 ```
 
 ### 5.3 Intern Valuta
@@ -498,50 +559,282 @@ FIAT (KYC påkrævet):
 - Undgår valutakurs problemer
 - Gør odds beregning simpelt
 
-### 5.4 Steam Trade Bot System
+### 5.4 Case Værdi System
+
+> **VIGTIGT:** Vores cases bruger FASTE VÆRDIER - skin billeder er kun marketing!
 
 ```
-┌────────────────────────────────────────────────────┐
-│              TRADE BOT ARKITEKTUR                  │
-├────────────────────────────────────────────────────┤
-│                                                    │
-│  ┌──────────────┐    ┌──────────────┐             │
-│  │   Bot Pool   │    │   Bot Pool   │             │
-│  │   (Deposits) │    │ (Withdrawals)│             │
-│  │              │    │              │             │
-│  │  Bot 1 [$5k] │    │  Bot A [$8k] │             │
-│  │  Bot 2 [$5k] │    │  Bot B [$8k] │             │
-│  │  Bot 3 [$5k] │    │  Bot C [$8k] │             │
-│  │  Bot 4 [$5k] │    │  Bot D [$8k] │             │
-│  │     ...      │    │     ...      │             │
-│  └──────┬───────┘    └──────┬───────┘             │
-│         │                   │                     │
-│         ▼                   ▼                     │
-│  ┌─────────────────────────────────────────────┐  │
-│  │           TRADE COORDINATOR                 │  │
-│  │  • Load balancing mellem bots               │  │
-│  │  • Inventory management                     │  │
-│  │  • Price checking (multiple APIs)           │  │
-│  │  • Trade offer creation & tracking          │  │
-│  │  • Steam Guard 2FA automation               │  │
-│  └─────────────────────────────────────────────┘  │
-│                                                    │
-│  INTEGRATIONER:                                    │
-│  • Steam Web API                                   │
-│  • Steamwebapi.com (inventory caching)            │
-│  • CSFloat / Buff163 (pricing)                    │
-│  • Pricempire (price aggregation)                 │
-│                                                    │
-└────────────────────────────────────────────────────┘
+SÅDAN FUNGERER DET:
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  Case indeholder IKKE rigtige skins                 │
+│  Skin billeder = Marketing / Visuel appeal          │
+│  Hver "skin" har en FAST COIN VÆRDI                 │
+│                                                     │
+│  Eksempel Case ($10):                               │
+│  ┌───────────────────────────────────────────────┐  │
+│  │ "Karambit Fade" billede    → 5000 EC ($50)    │  │
+│  │ "AWP Dragon Lore" billede  → 2000 EC ($20)    │  │
+│  │ "AK-47 Vulcan" billede     → 500 EC ($5)      │  │
+│  │ "M4A4 Howl" billede        → 100 EC ($1)      │  │
+│  │ "Glock Fade" billede       → 50 EC ($0.50)    │  │
+│  └───────────────────────────────────────────────┘  │
+│                                                     │
+│  Bruger VINDER COINS - ikke skins                   │
+│  Coins kan withdrawes som RIGTIGE skins via Waxpeer │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+
+FORDELE VED DETTE SYSTEM:
+├── Ingen skin inventory nødvendig ($0 startup cost)
+├── Ingen trade bots at vedligeholde
+├── Ingen Steam API rate limits
+├── Nemmere at balancere odds
+├── Brugere kan vælge præcis hvilke skins de vil have
+└── Skalerer uden problemer
 ```
 
-**Trade Bot Krav:**
-- 15+ dages Steam Guard på hver bot
-- Dedikeret telefonnummer per bot
-- Clean trade history
-- Geografisk distribueret (avoid bans)
-- Minimum 20 bots til launch
-- ~$100,000 skin inventory til start
+---
+
+## Del 5.5: Branding, Navn & Design
+
+### 5.5.1 Navneforslag (CS2 Skin-inspireret)
+
+> **Navnet skal være:** Kort, memorable, CS-relateret, og have ledigt domæne
+
+```
+TOP NAVNEFORSLAG (baseret på ikoniske skins):
+
+🏆 TIER 1 - BEDSTE VALG:
+┌────────────────────────────────────────────────────────────┐
+│ Navn          │ Inspiration        │ Domæne             │  │
+├───────────────┼────────────────────┼────────────────────┼──┤
+│ Emerald       │ Emerald Doppler    │ emerald.gg ✓       │  │
+│ Howl          │ M4A4 Howl          │ howl.gg / howl.bet │  │
+│ Doppler       │ Knife Doppler      │ doppler.gg         │  │
+│ Serpent       │ Fire Serpent       │ serpent.gg         │  │
+│ Asiimov       │ Asiimov skins      │ asiimov.gg         │  │
+└────────────────────────────────────────────────────────────┘
+
+🥈 TIER 2 - GODE ALTERNATIVER:
+├── Fade.gg (Fade skins - Karambit Fade etc)
+├── Crimson.gg (Crimson Web)
+├── Hyper.gg (Hyper Beast)
+├── Lore.gg (Dragon Lore)
+├── Neon.gg (Neon Revolution)
+└── Vulcan.gg (AK-47 Vulcan)
+
+🥉 TIER 3 - KREATIVE:
+├── Unbox.gg
+├── CaseDrop.gg
+├── SkinWars.gg
+└── BattleSkins.gg
+```
+
+**ANBEFALING:** `Emerald` - fordi:
+- Emerald Doppler er et af de sjældneste knife finishes
+- Grøn farve = unik i markedet (de fleste bruger rød/orange)
+- Kort og let at huske
+- Passer til "Emerald tier" i VIP system
+- Domæne: emerald.gg eller playemerarald.gg
+
+### 5.5.2 Farvepalette & Design System
+
+```
+EMERALD FARVEPALETTE:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  PRIMARY COLORS:                                            │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐                       │
+│  │ #10B981 │ │ #059669 │ │ #047857 │                       │
+│  │ Emerald │ │ Emerald │ │ Emerald │                       │
+│  │  400    │ │  500    │ │  600    │                       │
+│  └─────────┘ └─────────┘ └─────────┘                       │
+│                                                             │
+│  BACKGROUND COLORS (Dark theme - VIGTIGT for gaming):      │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
+│  │ #0a0a0a │ │ #111111 │ │ #1a1a1a │ │ #222222 │          │
+│  │  Base   │ │  Card   │ │  Hover  │ │ Border  │          │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
+│                                                             │
+│  ACCENT COLORS:                                             │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │
+│  │ #22d3ee │ │ #f59e0b │ │ #ef4444 │ │ #a855f7 │          │
+│  │  Cyan   │ │  Gold   │ │  Red    │ │ Purple  │          │
+│  │  (Win)  │ │ (Coins) │ │ (Lose)  │ │ (Rare)  │          │
+│  └─────────┘ └─────────┘ └─────────┘ └─────────┘          │
+│                                                             │
+│  RARITY COLORS (CS2 Standard):                              │
+│  ├── Consumer: #b0c3d9 (Grå)                               │
+│  ├── Industrial: #5e98d9 (Lys blå)                         │
+│  ├── Mil-Spec: #4b69ff (Blå)                               │
+│  ├── Restricted: #8847ff (Lilla)                           │
+│  ├── Classified: #d32ce6 (Pink)                            │
+│  ├── Covert: #eb4b4b (Rød)                                 │
+│  └── Contraband/Gold: #e4ae39 (Guld)                       │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+TAILWIND CONFIG:
+colors: {
+  emerald: {
+    50: '#ecfdf5',
+    100: '#d1fae5',
+    200: '#a7f3d0',
+    300: '#6ee7b7',
+    400: '#34d399',
+    500: '#10b981',  // Primary
+    600: '#059669',
+    700: '#047857',
+    800: '#065f46',
+    900: '#064e3b',
+  },
+  dark: {
+    base: '#0a0a0a',
+    card: '#111111',
+    hover: '#1a1a1a',
+    border: '#222222',
+    muted: '#333333',
+  }
+}
+```
+
+### 5.5.3 Animationer & Performance (KRITISK!)
+
+> **VIGTIGT:** Animationer er AFGØRENDE for brugeroplevelsen på gambling sites. De skal være SMOOTH (60fps) og LÆKRE.
+
+```
+ANIMATION PRINCIPPER:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  1. PERFORMANCE FIRST                                       │
+│  ├── Brug kun transform & opacity (GPU accelerated)        │
+│  ├── Undgå layout shifts (width, height, top, left)        │
+│  ├── will-change: transform på animerede elementer         │
+│  └── RequestAnimationFrame for custom animations           │
+│                                                             │
+│  2. FRAMER MOTION SETTINGS                                  │
+│  ├── spring: { damping: 20, stiffness: 300 }              │
+│  ├── Brug layoutId for shared element transitions          │
+│  └── AnimatePresence for mount/unmount                     │
+│                                                             │
+│  3. TIMING                                                  │
+│  ├── Micro-interactions: 150-200ms                         │
+│  ├── Page transitions: 300-400ms                           │
+│  ├── Case spinning: 3-8 sekunder (bygger spænding)        │
+│  └── Win celebration: 1-2 sekunder                         │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+VIGTIGE ANIMATIONER:
+
+1. CASE OPENING SPINNER (Mest kritiske animation!)
+┌─────────────────────────────────────────────────────────────┐
+│  • Horizontal scroll af items                               │
+│  • Starter hurtigt → decelererer smoothly                   │
+│  • "Tick" lyd for hvert item der passerer                   │
+│  • Glow effect på vinder item                               │
+│  • Particle explosion ved covert/knife                      │
+│  • Screen shake ved big win                                 │
+│                                                             │
+│  IMPLEMENTATION:                                            │
+│  - CSS transform: translateX() for scroll                   │
+│  - Cubic-bezier easing: cubic-bezier(0.15, 0.85, 0.4, 1)   │
+│  - Canvas/WebGL for particles (performance)                 │
+│  - Howler.js for synchronized lyd                           │
+└─────────────────────────────────────────────────────────────┘
+
+2. BATTLE ANIMATIONS
+├── Player join: Slide in fra side + pulse
+├── Round start: Countdown 3-2-1 med scale
+├── Parallel spinning: Synkroniseret via Socket.IO
+├── Round winner: Glow + score increment animation
+├── Battle winner: Confetti + all items fly to winner
+└── Value counter: Number ticker animation
+
+3. UI MICRO-INTERACTIONS
+├── Buttons: Scale 0.95 on press, glow on hover
+├── Cards: Subtle lift (translateY -2px) on hover
+├── Navigation: Underline slide animation
+├── Balance: Smooth number transition ved ændring
+├── Notifications: Slide in fra højre + fade
+└── Modals: Scale + fade with backdrop blur
+
+4. LOADING STATES
+├── Skeleton loaders med shimmer effect
+├── Spinner med emerald gradient
+├── Progress bars med glow
+└── Optimistic UI updates (instant feedback)
+
+LIBRARIES:
+├── Framer Motion (React animations)
+├── GSAP (komplekse timeline animations)
+├── Three.js (3D case model, optional)
+├── Lottie (pre-made animations)
+├── Howler.js (lyd synkronisering)
+└── Canvas Confetti (celebration effects)
+```
+
+### 5.5.4 UI Inspiration & Stil
+
+```
+DESIGN INSPIRATIONER:
+├── Rain.gg - Clean dark UI, gode animationer
+├── CSGORoll - Polished, professional look
+├── Stake.com - Modern gambling UI patterns
+└── Discord - Dark theme, smooth interactions
+
+STIL KEYWORDS:
+├── Dark & Premium
+├── Neon accents (emerald glow)
+├── Glassmorphism (subtle)
+├── Sharp corners (ikke rounded - mere "gaming")
+├── High contrast
+└── Futuristic/Cyber aesthetic
+
+TYPOGRAPHY:
+├── Headings: Inter / Outfit / Space Grotesk
+├── Body: Inter / SF Pro
+├── Numbers: Tabular nums (monospace digits)
+└── Sizes: 14px base, 1.25 scale ratio
+
+IKONER:
+├── Lucide React (clean, consistent)
+├── Custom skin icons
+└── Animated icons for states
+```
+
+### 5.5.5 Sprog & Internationalisering
+
+```
+SPROG SUPPORT:
+
+FASE 1 (Launch):
+└── 🇬🇧 Engelsk (Primary) - ALT UI på engelsk
+
+FASE 2 (Senere):
+├── 🇷🇺 Russisk (Stort CS2 marked)
+├── 🇧🇷 Portugisisk (Brasilien - voksende marked)
+└── 🇹🇷 Tyrkisk (Aktivt CS2 community)
+
+IMPLEMENTATION:
+├── next-intl eller react-i18next
+├── JSON language files
+├── Auto-detect browser language
+├── Manual language switcher i footer
+└── RTL support ikke nødvendigt (ingen arabisk til start)
+
+STRUKTUR:
+/locales
+├── en/
+│   ├── common.json
+│   ├── battles.json
+│   ├── cases.json
+│   └── errors.json
+└── ru/
+    ├── common.json
+    └── ...
+```
 
 ---
 
@@ -1044,29 +1337,45 @@ POST-LAUNCH:
 
 ---
 
-## Del 11: Budget Estimat
+## Del 11: Budget Estimat (LOW COST APPROACH)
 
-### 11.1 Opstartsomkostninger
+> **STRATEGI:** Start så billigt som muligt, skaler når vi har revenue
 
-| Kategori | Lav | Medium | Høj |
-|----------|-----|--------|-----|
-| Legal & Licens | $50,000 | $75,000 | $120,000 |
-| Udvikling (team) | $150,000 | $300,000 | $500,000 |
-| Infrastructure | $10,000 | $25,000 | $50,000 |
-| Skin Inventory | $50,000 | $100,000 | $250,000 |
-| Marketing (launch) | $50,000 | $150,000 | $300,000 |
-| **Total** | **$310,000** | **$650,000** | **$1,220,000** |
+### 11.1 Opstartsomkostninger (Minimum Viable)
 
-### 11.2 Månedlige Driftsomkostninger
+| Kategori | Bootstrap | Notes |
+|----------|-----------|-------|
+| Legal & Licens | $0 | Privat fase - ingen licens |
+| Domæne (.gg) | $20-50 | Årlig |
+| Udvikling | $0 | DIY / Founders |
+| Infrastructure setup | $0 | Free tiers |
+| Skin Inventory | $0 | Fixed value system! |
+| Marketing (launch) | $500 | Organic + små giveaways |
+| **Total** | **~$500-1000** | |
 
-| Kategori | Estimat |
-|----------|---------|
-| Hosting & Infrastructure | $5,000-15,000 |
-| Team (5-10 personer) | $30,000-80,000 |
-| Marketing | $20,000-100,000 |
-| Licens & Compliance | $5,000-10,000 |
-| Support & Operations | $5,000-15,000 |
-| **Total** | **$65,000-220,000** |
+### 11.2 Månedlige Driftsomkostninger (Start)
+
+| Kategori | Low Cost | Notes |
+|----------|----------|-------|
+| Hetzner VPS (CX31) | €10 (~$11) | 4 vCPU, 8GB RAM |
+| Hetzner Postgres | €15 (~$16) | Managed database |
+| Redis (Upstash) | $0 | Free tier (10k commands/day) |
+| Cloudflare | $0 | Free tier |
+| NOWPayments | 0.5% | Per transaktion |
+| Waxpeer | Variable | Per withdrawal |
+| Domain renewal | ~$2 | Monthly amortized |
+| **Total** | **~$30-50/måned** | Før vi skalerer |
+
+### 11.3 Skaleret Budget (Når vi vokser)
+
+| Kategori | Ved 1000 DAU | Ved 10000 DAU |
+|----------|--------------|---------------|
+| Servers | $50/mo | $200-500/mo |
+| Database | $50/mo | $150/mo |
+| Redis | $25/mo | $100/mo |
+| CDN/Security | $20/mo | $200/mo |
+| Support tools | $0 | $100/mo |
+| **Total** | **~$150/mo** | **~$1000/mo** |
 
 ### 11.3 Revenue Model
 
