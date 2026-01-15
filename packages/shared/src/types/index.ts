@@ -321,6 +321,27 @@ export interface ServerToClientEvents {
   'user:balanceUpdate': (data: { balance: number; change: number; reason: string }) => void;
   'user:notification': (data: NotificationEvent) => void;
   'user:levelUp': (data: { newLevel: number; rewards: Record<string, unknown> }) => void;
+
+  // Coinflip
+  'coinflip:created': (data: CoinflipCreatedEvent) => void;
+  'coinflip:joined': (data: CoinflipJoinedEvent) => void;
+  'coinflip:result': (data: CoinflipResultEvent) => void;
+  'coinflip:cancelled': (data: { gameId: string }) => void;
+
+  // Crash
+  'crash:newRound': (data: CrashNewRoundEvent) => void;
+  'crash:starting': (data: { roundId: string; startsIn: number }) => void;
+  'crash:tick': (data: CrashTickEvent) => void;
+  'crash:betPlaced': (data: CrashBetPlacedEvent) => void;
+  'crash:cashout': (data: CrashCashoutEvent) => void;
+  'crash:end': (data: CrashEndEvent) => void;
+  'crash:lost': (data: { odId: string; amount: number }) => void;
+
+  // Roulette
+  'roulette:newRound': (data: RouletteNewRoundEvent) => void;
+  'roulette:betPlaced': (data: RouletteBetPlacedEvent) => void;
+  'roulette:spin': (data: RouletteSpinEvent) => void;
+  'roulette:result': (data: RouletteResultEvent) => void;
 }
 
 export interface ClientToServerEvents {

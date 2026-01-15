@@ -280,7 +280,7 @@ export const caseRoutes: FastifyPluginAsync = async (fastify) => {
     for (const result of results) {
       if (result.item.coinValue >= bigWinThreshold) {
         io.emit('global:bigWin', {
-          odId: oderId,
+          odId: user.id,
           username: user.username,
           game: 'case',
           item: { name: result.item.name, value: result.item.coinValue },

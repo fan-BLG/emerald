@@ -400,7 +400,7 @@ export class BattleService {
     const winner = winnerParticipant
       ? {
           position: winnerParticipant.position,
-          odId: winnerParticipant.user.id,
+          userId: winnerParticipant.user.id,
           username: winnerParticipant.user.username,
           totalValue: winnerTotal,
         }
