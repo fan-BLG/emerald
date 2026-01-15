@@ -415,3 +415,183 @@ export const RARITY_COLORS: Record<SkinRarity, string> = {
   covert: '#eb4b4b',
   contraband: '#e4ae39',
 };
+
+// ==================== COINFLIP ====================
+export type CoinflipSide = 'heads' | 'tails';
+export type CoinflipStatus = 'waiting' | 'in_progress' | 'finished' | 'cancelled';
+
+export interface CoinflipGame {
+  id: string;
+  creatorId: string;
+  creator: UserPublic;
+  opponentId: string | null;
+  opponent: UserPublic | null;
+  creatorSide: CoinflipSide;
+  amount: number;
+  status: CoinflipStatus;
+  winnerId: string | null;
+  winner: UserPublic | null;
+  winnerSide: CoinflipSide | null;
+  serverSeedHash: string;
+  rollValue: number | null;
+  createdAt: Date;
+  finishedAt: Date | null;
+}
+
+// ==================== CRASH ====================
+export type CrashRoundStatus = 'betting' | 'running' | 'crashed';
+export type CrashBetStatus = 'active' | 'cashed_out' | 'lost';
+
+export interface CrashRound {
+  id: string;
+  status: CrashRoundStatus;
+  crashPoint: number | null;
+  serverSeedHash: string;
+  publicSeed: string | null;
+  totalBets: number;
+  totalPayout: number;
+  startedAt: Date | null;
+  crashedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface CrashBet {
+  id: string;
+  roundId: string;
+  userId: string;
+  user: UserPublic;
+  amount: number;
+  autoCashout: number | null;
+  cashedOutAt: number | null;
+  payout: number | null;
+  status: CrashBetStatus;
+  createdAt: Date;
+}
+
+export interface CrashRoundWithBets extends CrashRound {
+  bets: CrashBet[];
+}
+
+// ==================== ROULETTE ====================
+export type RouletteRoundStatus = 'betting' | 'spinning' | 'finished';
+export type RouletteBetType = 'red' | 'black' | 'green';
+
+// Roulette colors: 0 = green, 1-7 = red, 8-14 = black
+export const ROULETTE_COLORS: Record<number, RouletteBetType> = {
+  0: 'green',
+  1: 'red', 2: 'red', 3: 'red', 4: 'red', 5: 'red', 6: 'red', 7: 'red',
+  8: 'black', 9: 'black', 10: 'black', 11: 'black', 12: 'black', 13: 'black', 14: 'black',
+};
+
+export const ROULETTE_MULTIPLIERS: Record<RouletteBetType, number> = {
+  green: 14,
+  red: 2,
+  black: 2,
+};
+
+export interface RouletteRound {
+  id: string;
+  status: RouletteRoundStatus;
+  result: number | null;
+  serverSeedHash: string;
+  publicSeed: string | null;
+  rollValue: number | null;
+  totalBets: number;
+  totalPayout: number;
+  bettingEndsAt: Date | null;
+  spinStartedAt: Date | null;
+  finishedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface RouletteBet {
+  id: string;
+  roundId: string;
+  userId: string;
+  user: UserPublic;
+  betType: RouletteBetType;
+  amount: number;
+  won: boolean | null;
+  payout: number | null;
+  createdAt: Date;
+}
+
+export interface RouletteRoundWithBets extends RouletteRound {
+  bets: RouletteBet[];
+}
+
+// ==================== GAME SOCKET EVENTS ====================
+
+// Coinflip Events
+export interface CoinflipCreatedEvent {
+  game: CoinflipGame;
+}
+
+export interface CoinflipJoinedEvent {
+  gameId: string;
+  opponent: UserPublic;
+}
+
+export interface CoinflipResultEvent {
+  gameId: string;
+  winnerSide: CoinflipSide;
+  winnerId: string;
+  rollValue: number;
+  serverSeed: string;
+}
+
+// Crash Events
+export interface CrashTickEvent {
+  roundId: string;
+  multiplier: number;
+  elapsed: number;
+}
+
+export interface CrashBetPlacedEvent {
+  roundId: string;
+  bet: CrashBet;
+}
+
+export interface CrashCashoutEvent {
+  roundId: string;
+  userId: string;
+  username: string;
+  multiplier: number;
+  payout: number;
+}
+
+export interface CrashEndEvent {
+  roundId: string;
+  crashPoint: number;
+  serverSeed: string;
+}
+
+export interface CrashNewRoundEvent {
+  round: CrashRound;
+  bettingEndsIn: number;
+}
+
+// Roulette Events
+export interface RouletteNewRoundEvent {
+  round: RouletteRound;
+  bettingEndsIn: number;
+}
+
+export interface RouletteBetPlacedEvent {
+  roundId: string;
+  bet: RouletteBet;
+  totals: { red: number; black: number; green: number };
+}
+
+export interface RouletteSpinEvent {
+  roundId: string;
+  duration: number;
+}
+
+export interface RouletteResultEvent {
+  roundId: string;
+  result: number;
+  color: RouletteBetType;
+  serverSeed: string;
+  winners: { odId: string; username: string; payout: number }[];
+}

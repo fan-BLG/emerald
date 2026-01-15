@@ -116,6 +116,45 @@ export const getBattlesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(50).default(20),
 });
 
+// ==================== COINFLIP ====================
+export const coinflipSideSchema = z.enum(['heads', 'tails']);
+
+export const createCoinflipSchema = z.object({
+  side: coinflipSideSchema,
+  amount: z.number().min(0.10).max(100000),
+  vsBot: z.boolean().default(false), // true = play vs bot (2% edge), false = PVP (0% edge)
+});
+
+export const joinCoinflipSchema = z.object({
+  gameId: uuidSchema,
+});
+
+export const getCoinflipsQuerySchema = z.object({
+  status: z.enum(['waiting', 'in_progress', 'finished', 'cancelled']).optional(),
+  minAmount: z.coerce.number().min(0).optional(),
+  maxAmount: z.coerce.number().max(1000000).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+
+// ==================== CRASH ====================
+export const placeCrashBetSchema = z.object({
+  amount: z.number().min(0.10).max(100000),
+  autoCashout: z.number().min(1.01).max(1000000).optional(),
+});
+
+export const cashoutCrashSchema = z.object({
+  roundId: uuidSchema,
+});
+
+// ==================== ROULETTE ====================
+export const rouletteBetTypeSchema = z.enum(['red', 'black', 'green']);
+
+export const placeRouletteBetSchema = z.object({
+  betType: rouletteBetTypeSchema,
+  amount: z.number().min(0.10).max(100000),
+});
+
 // ==================== TYPE EXPORTS ====================
 export type AuthToken = z.infer<typeof authTokenSchema>;
 export type UpdateUserSettings = z.infer<typeof updateUserSettingsSchema>;
@@ -132,3 +171,9 @@ export type ChatMessageInput = z.infer<typeof chatMessageSchema>;
 export type CalculateResult = z.infer<typeof calculateResultSchema>;
 export type Pagination = z.infer<typeof paginationSchema>;
 export type GetBattlesQuery = z.infer<typeof getBattlesQuerySchema>;
+export type CreateCoinflip = z.infer<typeof createCoinflipSchema>;
+export type JoinCoinflip = z.infer<typeof joinCoinflipSchema>;
+export type GetCoinflipsQuery = z.infer<typeof getCoinflipsQuerySchema>;
+export type PlaceCrashBet = z.infer<typeof placeCrashBetSchema>;
+export type CashoutCrash = z.infer<typeof cashoutCrashSchema>;
+export type PlaceRouletteBet = z.infer<typeof placeRouletteBetSchema>;

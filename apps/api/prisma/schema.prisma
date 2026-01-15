@@ -58,6 +58,17 @@ model User {
   chatMessages        ChatMessage[]
   customCases         Case[]              @relation("CaseCreator")
 
+  // Coinflip relations
+  coinflipsCreated    CoinflipGame[]      @relation("CoinflipCreator")
+  coinflipsJoined     CoinflipGame[]      @relation("CoinflipOpponent")
+  coinflipsWon        CoinflipGame[]      @relation("CoinflipWinner")
+
+  // Crash relations
+  crashBets           CrashBet[]
+
+  // Roulette relations
+  rouletteBets        RouletteBet[]
+
   @@map("users")
 }
 
@@ -366,4 +377,132 @@ model ChatMessage {
   user            User     @relation(fields: [userId], references: [id])
 
   @@map("chat_messages")
+}
+
+// ==================== COINFLIP ====================
+model CoinflipGame {
+  id              String   @id @default(uuid())
+
+  creatorId       String   @map("creator_id")
+  opponentId      String?  @map("opponent_id")
+
+  creatorSide     String   @map("creator_side") // heads/tails
+  amount          Decimal  @db.Decimal(18, 2)
+  isVsBot         Boolean  @default(false) @map("is_vs_bot") // true = vs bot (2% edge), false = PVP (0% edge)
+
+  status          String   @default("waiting") // waiting/in_progress/finished/cancelled
+  winnerId        String?  @map("winner_id")
+  winnerSide      String?  @map("winner_side")
+
+  // Provably Fair
+  serverSeed      String   @map("server_seed")
+  serverSeedHash  String   @map("server_seed_hash")
+  clientSeed      String?  @map("client_seed")
+  nonce           Int      @default(0)
+  rollValue       Decimal? @map("roll_value") @db.Decimal(20, 10)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  // Relations
+  creator         User     @relation("CoinflipCreator", fields: [creatorId], references: [id])
+  opponent        User?    @relation("CoinflipOpponent", fields: [opponentId], references: [id])
+  winner          User?    @relation("CoinflipWinner", fields: [winnerId], references: [id])
+
+  @@map("coinflip_games")
+}
+
+// ==================== CRASH ====================
+model CrashRound {
+  id              String   @id @default(uuid())
+
+  status          String   @default("betting") // betting/running/crashed
+  crashPoint      Decimal? @map("crash_point") @db.Decimal(10, 2)
+
+  // Provably Fair
+  serverSeed      String   @map("server_seed")
+  serverSeedHash  String   @map("server_seed_hash")
+  publicSeed      String?  @map("public_seed")
+
+  totalBets       Decimal  @default(0) @map("total_bets") @db.Decimal(18, 2)
+  totalPayout     Decimal  @default(0) @map("total_payout") @db.Decimal(18, 2)
+
+  startedAt       DateTime? @map("started_at")
+  crashedAt       DateTime? @map("crashed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bets            CrashBet[]
+
+  @@map("crash_rounds")
+}
+
+model CrashBet {
+  id              String   @id @default(uuid())
+  roundId         String   @map("round_id")
+  userId          String   @map("user_id")
+
+  amount          Decimal  @db.Decimal(18, 2)
+  autoCashout     Decimal? @map("auto_cashout") @db.Decimal(10, 2)
+
+  cashedOutAt     Decimal? @map("cashed_out_at") @db.Decimal(10, 2) // multiplier when cashed out
+  payout          Decimal? @db.Decimal(18, 2)
+
+  status          String   @default("active") // active/cashed_out/lost
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  round           CrashRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user            User       @relation(fields: [userId], references: [id])
+
+  @@unique([roundId, userId])
+  @@map("crash_bets")
+}
+
+// ==================== ROULETTE ====================
+model RouletteRound {
+  id              String   @id @default(uuid())
+
+  status          String   @default("betting") // betting/spinning/finished
+  result          Int?     // 0-14 (0 = green, 1-7 = red, 8-14 = black)
+
+  // Provably Fair
+  serverSeed      String   @map("server_seed")
+  serverSeedHash  String   @map("server_seed_hash")
+  publicSeed      String?  @map("public_seed")
+  rollValue       Decimal? @map("roll_value") @db.Decimal(20, 10)
+
+  totalBets       Decimal  @default(0) @map("total_bets") @db.Decimal(18, 2)
+  totalPayout     Decimal  @default(0) @map("total_payout") @db.Decimal(18, 2)
+
+  bettingEndsAt   DateTime? @map("betting_ends_at")
+  spinStartedAt   DateTime? @map("spin_started_at")
+  finishedAt      DateTime? @map("finished_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  bets            RouletteBet[]
+
+  @@map("roulette_rounds")
+}
+
+model RouletteBet {
+  id              String   @id @default(uuid())
+  roundId         String   @map("round_id")
+  userId          String   @map("user_id")
+
+  betType         String   @map("bet_type") // red/black/green
+  amount          Decimal  @db.Decimal(18, 2)
+
+  won             Boolean?
+  payout          Decimal? @db.Decimal(18, 2)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  round           RouletteRound @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@map("roulette_bets")
 }

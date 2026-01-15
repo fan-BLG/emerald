@@ -18,6 +18,9 @@ import { chatRoutes } from './routes/chat.js';
 import { leaderboardRoutes } from './routes/leaderboard.js';
 import { statsRoutes } from './routes/stats.js';
 import { affiliateRoutes } from './routes/affiliate.js';
+import { coinflipRoutes } from './routes/coinflip.js';
+import { crashRoutes } from './routes/crash.js';
+import { rouletteRoutes } from './routes/roulette.js';
 
 // Import socket handlers
 import { setupSocketHandlers } from './socket/index.js';
@@ -75,6 +78,9 @@ async function registerRoutes() {
   fastify.register(leaderboardRoutes, { prefix: '/api/leaderboard' });
   fastify.register(statsRoutes, { prefix: '/api/stats' });
   fastify.register(affiliateRoutes, { prefix: '/api/affiliate' });
+  fastify.register(coinflipRoutes, { prefix: '/api/coinflip' });
+  fastify.register(crashRoutes, { prefix: '/api/crash' });
+  fastify.register(rouletteRoutes, { prefix: '/api/roulette' });
 
   // Health check
   fastify.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
