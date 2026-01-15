@@ -95,17 +95,23 @@ export default function BattlePage() {
     socket.emit('battle:spectate', { battleId: id as string });
 
     // Listen for updates
-    const handlePlayerJoined = (data: { odId: string; participant: BattleParticipant }) => {
+    const handlePlayerJoined = (data: { battleId: string; position: number; player: any }) => {
       setBattle(prev => prev ? {
         ...prev,
-        participants: [...prev.participants, data.participant],
+        participants: [...prev.participants, {
+          id: data.player.id,
+          odId: data.player.id,
+          user: data.player,
+          position: data.position,
+          totalValue: 0,
+        }],
       } : null);
     };
 
-    const handlePlayerLeft = (data: { odId: string }) => {
+    const handlePlayerLeft = (data: { battleId: string; position: number; userId: string }) => {
       setBattle(prev => prev ? {
         ...prev,
-        participants: prev.participants.filter(p => p.odId !== data.odId),
+        participants: prev.participants.filter(p => p.user.id !== data.userId),
       } : null);
     };
 
