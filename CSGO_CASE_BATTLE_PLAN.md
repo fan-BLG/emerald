@@ -135,7 +135,319 @@ seeds (
 )
 ```
 
-### 2.3 Systemarkitektur Diagram
+### 2.3 Detaljeret Database Schema
+
+```sql
+-- =====================================================
+-- EMERALD DATABASE SCHEMA (PostgreSQL)
+-- =====================================================
+
+-- ==================== USERS ====================
+CREATE TABLE users (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    steam_id        VARCHAR(20) UNIQUE NOT NULL,
+    username        VARCHAR(32) NOT NULL,
+    avatar_url      TEXT,
+    email           VARCHAR(255),
+
+    -- Balance & Economy
+    balance         DECIMAL(18,2) DEFAULT 0.00,  -- Emerald Coins
+    total_deposited DECIMAL(18,2) DEFAULT 0.00,
+    total_withdrawn DECIMAL(18,2) DEFAULT 0.00,
+    total_wagered   DECIMAL(18,2) DEFAULT 0.00,
+    total_won       DECIMAL(18,2) DEFAULT 0.00,
+
+    -- Leveling
+    level           INTEGER DEFAULT 1,
+    xp              BIGINT DEFAULT 0,
+    vip_tier        VARCHAR(20) DEFAULT 'bronze',  -- bronze/silver/gold/platinum/diamond/emerald
+
+    -- Settings
+    emerald_spin_enabled  BOOLEAN DEFAULT true,
+    client_seed           VARCHAR(64),
+
+    -- Security
+    is_banned       BOOLEAN DEFAULT false,
+    ban_reason      TEXT,
+    is_2fa_enabled  BOOLEAN DEFAULT false,
+
+    -- Timestamps
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    last_login_at   TIMESTAMP
+);
+
+-- ==================== SKINS (Marketing Images) ====================
+CREATE TABLE skins (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100) NOT NULL,           -- "AWP | Dragon Lore"
+    market_hash_name VARCHAR(150) NOT NULL UNIQUE,   -- Steam market name
+    image_url       TEXT NOT NULL,
+
+    -- Properties
+    rarity          VARCHAR(20) NOT NULL,  -- consumer/industrial/milspec/restricted/classified/covert/contraband
+    weapon_type     VARCHAR(30),           -- knife/rifle/pistol/smg/shotgun/machinegun
+    collection      VARCHAR(100),
+    exterior        VARCHAR(30),           -- fn/mw/ft/ww/bs
+    is_stattrak     BOOLEAN DEFAULT false,
+
+    -- For display purposes only (actual value in case_items)
+    display_price   DECIMAL(18,2),
+
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ==================== CASES ====================
+CREATE TABLE cases (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100) NOT NULL,
+    slug            VARCHAR(100) UNIQUE NOT NULL,
+    image_url       TEXT NOT NULL,
+
+    -- Pricing
+    price           DECIMAL(18,2) NOT NULL,  -- Cost to open
+    house_edge      DECIMAL(5,2) DEFAULT 8.00,  -- Percentage
+
+    -- Type
+    is_custom       BOOLEAN DEFAULT false,
+    creator_id      UUID REFERENCES users(id),
+    is_featured     BOOLEAN DEFAULT false,
+    is_active       BOOLEAN DEFAULT true,
+
+    -- Stats
+    total_opened    BIGINT DEFAULT 0,
+
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ==================== CASE ITEMS (Skin drops i cases) ====================
+CREATE TABLE case_items (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    case_id         UUID NOT NULL REFERENCES cases(id) ON DELETE CASCADE,
+    skin_id         UUID NOT NULL REFERENCES skins(id),
+
+    -- VIGTIGT: Fast coin værdi (ikke skin værdi!)
+    coin_value      DECIMAL(18,2) NOT NULL,  -- Hvad brugeren vinder i coins
+
+    -- Odds
+    odds_weight     INTEGER NOT NULL,  -- Relativ vægt (fx 1, 10, 100, 1000)
+    odds_percentage DECIMAL(8,5),      -- Kalkuleret procent
+
+    UNIQUE(case_id, skin_id)
+);
+
+-- ==================== BATTLES ====================
+CREATE TABLE battles (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- Battle setup
+    type            VARCHAR(20) NOT NULL,    -- standard/team/shared
+    mode            VARCHAR(20) NOT NULL,    -- normal/crazy/cursed/progressive/mystery
+    max_players     INTEGER NOT NULL,        -- 2, 3, 4
+    team_size       INTEGER DEFAULT 1,       -- 1 for standard, 2 for 2v2, etc.
+
+    -- Options
+    is_private      BOOLEAN DEFAULT false,
+    private_code    VARCHAR(20),
+    is_fast_mode    BOOLEAN DEFAULT false,
+    emerald_spin    BOOLEAN DEFAULT true,
+
+    -- Status
+    status          VARCHAR(20) DEFAULT 'waiting',  -- waiting/starting/in_progress/finished/cancelled
+    current_round   INTEGER DEFAULT 0,
+    total_rounds    INTEGER NOT NULL,
+
+    -- Economics
+    cost_per_player DECIMAL(18,2) NOT NULL,
+    total_value     DECIMAL(18,2) DEFAULT 0.00,
+
+    -- Provably Fair
+    server_seed         VARCHAR(64) NOT NULL,
+    server_seed_hash    VARCHAR(64) NOT NULL,  -- Vises FØR battle
+    public_seed         VARCHAR(64),            -- EOS block hash (set ved start)
+
+    -- Results
+    winner_id       UUID REFERENCES users(id),
+    winning_team    INTEGER,
+
+    -- Creator
+    created_by      UUID NOT NULL REFERENCES users(id),
+    created_at      TIMESTAMP DEFAULT NOW(),
+    started_at      TIMESTAMP,
+    finished_at     TIMESTAMP
+);
+
+-- ==================== BATTLE CASES (Hvilke cases i battle) ====================
+CREATE TABLE battle_cases (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    battle_id       UUID NOT NULL REFERENCES battles(id) ON DELETE CASCADE,
+    case_id         UUID NOT NULL REFERENCES cases(id),
+    round_number    INTEGER NOT NULL,
+
+    UNIQUE(battle_id, round_number)
+);
+
+-- ==================== BATTLE PARTICIPANTS ====================
+CREATE TABLE battle_participants (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    battle_id       UUID NOT NULL REFERENCES battles(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES users(id),
+
+    position        INTEGER NOT NULL,  -- 0, 1, 2, 3
+    team            INTEGER,           -- For team battles
+
+    -- Results
+    total_value     DECIMAL(18,2) DEFAULT 0.00,
+    is_winner       BOOLEAN DEFAULT false,
+
+    joined_at       TIMESTAMP DEFAULT NOW(),
+
+    UNIQUE(battle_id, user_id),
+    UNIQUE(battle_id, position)
+);
+
+-- ==================== BATTLE ROUNDS (Results per round per player) ====================
+CREATE TABLE battle_rounds (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    battle_id       UUID NOT NULL REFERENCES battles(id) ON DELETE CASCADE,
+    participant_id  UUID NOT NULL REFERENCES battle_participants(id) ON DELETE CASCADE,
+    round_number    INTEGER NOT NULL,
+
+    -- Result
+    case_item_id    UUID NOT NULL REFERENCES case_items(id),
+    coin_value      DECIMAL(18,2) NOT NULL,
+
+    -- Provably Fair
+    nonce           INTEGER NOT NULL,
+    roll_value      DECIMAL(20,10) NOT NULL,  -- 0-1 value fra hash
+
+    -- Emerald Spin trigger?
+    triggered_emerald_spin BOOLEAN DEFAULT false,
+
+    created_at      TIMESTAMP DEFAULT NOW(),
+
+    UNIQUE(battle_id, participant_id, round_number)
+);
+
+-- ==================== TRANSACTIONS ====================
+CREATE TABLE transactions (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+
+    type            VARCHAR(30) NOT NULL,  -- deposit/withdrawal/battle_entry/battle_win/case_open/case_win/bonus/rakeback
+    amount          DECIMAL(18,2) NOT NULL,
+
+    -- Reference
+    reference_type  VARCHAR(30),  -- battle/case/withdrawal/deposit
+    reference_id    UUID,
+
+    -- Status
+    status          VARCHAR(20) DEFAULT 'completed',  -- pending/completed/failed/cancelled
+
+    -- Metadata
+    description     TEXT,
+    metadata        JSONB,
+
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ==================== CRYPTO DEPOSITS (NOWPayments) ====================
+CREATE TABLE crypto_deposits (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+
+    -- NOWPayments data
+    payment_id      VARCHAR(100) UNIQUE,
+    payment_status  VARCHAR(30),  -- waiting/confirming/confirmed/sending/partially_paid/finished/failed/refunded/expired
+
+    pay_address     TEXT,
+    pay_currency    VARCHAR(10),  -- BTC/ETH/USDT/etc
+    pay_amount      DECIMAL(18,8),
+
+    -- Conversion
+    price_currency  VARCHAR(10) DEFAULT 'USD',
+    price_amount    DECIMAL(18,2),  -- USD amount
+
+    actually_paid   DECIMAL(18,8) DEFAULT 0,
+
+    -- Credit
+    coins_credited  DECIMAL(18,2) DEFAULT 0,
+    credited_at     TIMESTAMP,
+
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    expires_at      TIMESTAMP
+);
+
+-- ==================== SKIN WITHDRAWALS (Waxpeer) ====================
+CREATE TABLE skin_withdrawals (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+
+    -- Withdrawal details
+    coin_amount     DECIMAL(18,2) NOT NULL,  -- Coins brugt
+
+    -- Waxpeer data
+    waxpeer_item_id VARCHAR(100),
+    skin_name       VARCHAR(150),
+    trade_link      TEXT NOT NULL,
+
+    -- Status
+    status          VARCHAR(30) DEFAULT 'pending',  -- pending/processing/sent/completed/failed/cancelled
+    waxpeer_trade_id VARCHAR(100),
+
+    -- Timestamps
+    created_at      TIMESTAMP DEFAULT NOW(),
+    processed_at    TIMESTAMP,
+    completed_at    TIMESTAMP,
+
+    error_message   TEXT
+);
+
+-- ==================== USER SEEDS (Provably Fair) ====================
+CREATE TABLE user_seeds (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+
+    server_seed     VARCHAR(64) NOT NULL,
+    server_seed_hash VARCHAR(64) NOT NULL,
+    client_seed     VARCHAR(64) NOT NULL,
+    nonce           INTEGER DEFAULT 0,
+
+    is_active       BOOLEAN DEFAULT true,
+    revealed_at     TIMESTAMP,  -- Når server seed afsløres
+
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ==================== CHAT MESSAGES ====================
+CREATE TABLE chat_messages (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id         UUID NOT NULL REFERENCES users(id),
+    room            VARCHAR(30) DEFAULT 'global',  -- global/english/russian
+    message         TEXT NOT NULL,
+
+    is_deleted      BOOLEAN DEFAULT false,
+    deleted_by      UUID REFERENCES users(id),
+
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+-- ==================== INDEXES ====================
+CREATE INDEX idx_users_steam_id ON users(steam_id);
+CREATE INDEX idx_users_level ON users(level);
+CREATE INDEX idx_battles_status ON battles(status);
+CREATE INDEX idx_battles_created_at ON battles(created_at DESC);
+CREATE INDEX idx_battle_participants_user ON battle_participants(user_id);
+CREATE INDEX idx_transactions_user ON transactions(user_id);
+CREATE INDEX idx_transactions_created ON transactions(created_at DESC);
+CREATE INDEX idx_crypto_deposits_payment_id ON crypto_deposits(payment_id);
+CREATE INDEX idx_skin_withdrawals_user ON skin_withdrawals(user_id);
+CREATE INDEX idx_chat_messages_room ON chat_messages(room, created_at DESC);
+```
+
+### 2.4 Systemarkitektur Diagram
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -182,6 +494,763 @@ seeds (
 │  │   Bot   │ │  Engine │ │ Gateway │ │ System  │ │
 │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ │
 └───────────────────────────────────────────────────┘
+```
+
+### 2.5 Socket.IO Events (Real-time Communication)
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║                     SOCKET.IO EVENT SYSTEM                        ║
+╠═══════════════════════════════════════════════════════════════════╣
+
+NAMESPACES:
+├── /              (default - global events)
+├── /battles       (battle-specific events)
+├── /chat          (chat rooms)
+└── /user          (user-specific notifications)
+
+════════════════════════════════════════════════════════════════════
+CLIENT → SERVER EVENTS:
+════════════════════════════════════════════════════════════════════
+
+// Authentication
+socket.emit('auth', { token: 'jwt_token' });
+
+// Battles
+socket.emit('battle:create', {
+  type: 'standard',           // standard/team/shared
+  mode: 'normal',             // normal/crazy/cursed/progressive/mystery
+  maxPlayers: 2,
+  cases: ['case_id_1', 'case_id_2'],
+  options: {
+    isPrivate: false,
+    isFastMode: false,
+    emeraldSpin: true
+  }
+});
+
+socket.emit('battle:join', {
+  battleId: 'uuid',
+  position: 1,                // 0-3
+  team: null                  // for team battles
+});
+
+socket.emit('battle:leave', { battleId: 'uuid' });
+
+socket.emit('battle:spectate', { battleId: 'uuid' });
+socket.emit('battle:unspectate', { battleId: 'uuid' });
+
+// Chat
+socket.emit('chat:message', {
+  room: 'global',             // global/english/russian
+  message: 'Hello world!'
+});
+
+socket.emit('chat:join', { room: 'english' });
+socket.emit('chat:leave', { room: 'english' });
+
+// User Actions
+socket.emit('user:updateSeed', { clientSeed: 'new_seed_123' });
+socket.emit('user:toggleEmeraldSpin', { enabled: true });
+
+════════════════════════════════════════════════════════════════════
+SERVER → CLIENT EVENTS:
+════════════════════════════════════════════════════════════════════
+
+// Connection
+socket.on('connected', { userId, balance, settings });
+socket.on('error', { code, message });
+
+// Battle Lifecycle
+socket.on('battle:created', {
+  id: 'uuid',
+  type: 'standard',
+  mode: 'normal',
+  maxPlayers: 2,
+  cases: [...],
+  costPerPlayer: 50.00,
+  serverSeedHash: 'sha256_hash',
+  createdBy: { id, username, avatar },
+  status: 'waiting'
+});
+
+socket.on('battle:playerJoined', {
+  battleId: 'uuid',
+  position: 1,
+  player: { id, username, avatar, level }
+});
+
+socket.on('battle:playerLeft', {
+  battleId: 'uuid',
+  position: 1,
+  userId: 'uuid'
+});
+
+socket.on('battle:starting', {
+  battleId: 'uuid',
+  countdown: 3,              // seconds
+  publicSeed: 'eos_block_hash'
+});
+
+socket.on('battle:roundStart', {
+  battleId: 'uuid',
+  round: 1,
+  totalRounds: 5,
+  case: { id, name, imageUrl, price }
+});
+
+// THE MAIN EVENT - Spin Results
+socket.on('battle:roundResult', {
+  battleId: 'uuid',
+  round: 1,
+  results: [
+    {
+      position: 0,
+      playerId: 'uuid',
+      item: {
+        skinId: 'uuid',
+        name: 'AWP | Dragon Lore',
+        imageUrl: '...',
+        rarity: 'covert',
+        coinValue: 250.00
+      },
+      isEmeraldSpin: true,    // Trigger special animation!
+      nonce: 1,
+      rollValue: 0.00234      // For verification
+    },
+    {
+      position: 1,
+      playerId: 'uuid',
+      item: { ... },
+      isEmeraldSpin: false,
+      nonce: 1,
+      rollValue: 0.45678
+    }
+  ],
+  roundWinner: 0,             // Position of round winner (or null for tie)
+  scores: [
+    { position: 0, total: 250.00 },
+    { position: 1, total: 45.00 }
+  ]
+});
+
+socket.on('battle:finished', {
+  battleId: 'uuid',
+  winner: {
+    position: 0,
+    userId: 'uuid',
+    username: 'Winner123',
+    totalValue: 520.00
+  },
+  loser: { ... },
+  serverSeed: 'revealed_seed',  // NOW can verify!
+  allItems: [...]               // All items won
+});
+
+socket.on('battle:cancelled', {
+  battleId: 'uuid',
+  reason: 'creator_left',
+  refunded: true
+});
+
+// Chat Events
+socket.on('chat:message', {
+  id: 'uuid',
+  room: 'global',
+  user: { id, username, avatar, level, vipTier },
+  message: 'Hello!',
+  timestamp: 1234567890
+});
+
+socket.on('chat:deleted', { messageId: 'uuid' });
+
+// Global Events (all users)
+socket.on('global:bigWin', {
+  userId: 'uuid',
+  username: 'LuckyUser',
+  game: 'battle',
+  item: { name: 'Karambit | Emerald', value: 12500.00 },
+  multiplier: 125.0
+});
+
+socket.on('global:battleCreated', {
+  battleId: 'uuid',
+  type: 'standard',
+  totalValue: 500.00,
+  creator: { username, avatar }
+});
+
+// User-specific Events
+socket.on('user:balanceUpdate', {
+  balance: 127.84,
+  change: -50.00,
+  reason: 'battle_entry'
+});
+
+socket.on('user:notification', {
+  type: 'withdrawal_complete',
+  title: 'Withdrawal Sent!',
+  message: 'Your AWP | Asiimov has been sent to your Steam account',
+  data: { ... }
+});
+
+socket.on('user:levelUp', {
+  newLevel: 25,
+  rewards: { ... }
+});
+
+╚═══════════════════════════════════════════════════════════════════╝
+
+ROOMS & BROADCASTING:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  battle:{battleId}     → Alle i specifik battle + spectators    │
+│  chat:{room}           → Alle i chat room                       │
+│  user:{odId}           → Kun specifik bruger (private events)   │
+│  global                → Alle connected users                    │
+│                                                                 │
+│  EKSEMPEL (Server-side):                                        │
+│  io.to(`battle:${battleId}`).emit('battle:roundResult', data);  │
+│  io.to('global').emit('global:bigWin', data);                   │
+│  io.to(`user:${userId}`).emit('user:balanceUpdate', data);      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 2.6 REST API Endpoints
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║                     EMERALD REST API v1                           ║
+║                     Base URL: /api/v1                             ║
+╠═══════════════════════════════════════════════════════════════════╣
+
+═══════════════════════════════════════════════════════════════════
+AUTH ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /auth/steam              → Redirect til Steam OAuth
+GET    /auth/steam/callback     → Steam OAuth callback
+POST   /auth/refresh            → Refresh JWT token
+POST   /auth/logout             → Invalidate session
+GET    /auth/me                 → Get current user info
+
+═══════════════════════════════════════════════════════════════════
+USER ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /users/:id               → Get user profile (public info)
+GET    /users/:id/stats         → Get user statistics
+GET    /users/:id/history       → Get game history
+PUT    /users/settings          → Update user settings
+PUT    /users/client-seed       → Update client seed
+GET    /users/transactions      → Get transaction history
+GET    /users/notifications     → Get notifications
+
+═══════════════════════════════════════════════════════════════════
+CASES ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /cases                   → List all cases
+       ?featured=true           → Only featured
+       ?category=low-risk       → Filter by category
+       ?sort=popular            → Sort order
+       ?page=1&limit=20         → Pagination
+
+GET    /cases/:id               → Get case details with items
+GET    /cases/:id/drops         → Get recent drops from case
+POST   /cases/:id/open          → Open a case (solo)
+
+── Body: { count: 1 }           → Number of cases to open
+── Response: { items: [...], newBalance }
+
+GET    /cases/custom            → List custom cases
+POST   /cases/custom            → Create custom case
+PUT    /cases/custom/:id        → Update custom case (draft only)
+DELETE /cases/custom/:id        → Delete custom case (draft only)
+
+═══════════════════════════════════════════════════════════════════
+BATTLES ENDPOINTS: (HOVEDFOKUS)
+═══════════════════════════════════════════════════════════════════
+
+GET    /battles                 → List active battles
+       ?status=waiting          → Filter by status
+       ?type=standard           → Filter by type
+       ?mode=crazy              → Filter by mode
+       ?minPrice=10             → Min price filter
+       ?maxPrice=1000           → Max price filter
+       ?sort=newest             → Sort order
+
+GET    /battles/:id             → Get battle details
+GET    /battles/:id/verify      → Get provably fair data
+
+POST   /battles                 → Create new battle
+── Body: {
+     type: 'standard',
+     mode: 'normal',
+     maxPlayers: 2,
+     cases: ['case_id_1', 'case_id_2'],
+     options: {
+       isPrivate: false,
+       isFastMode: false,
+       emeraldSpin: true
+     }
+   }
+── Response: { battle, serverSeedHash }
+
+POST   /battles/:id/join        → Join a battle
+── Body: { position: 1, team: null }
+── Response: { success, battle }
+
+POST   /battles/:id/leave       → Leave a waiting battle
+DELETE /battles/:id             → Cancel battle (creator only, if waiting)
+
+POST   /battles/random          → Generate random battle ("Create for me")
+── Body: {
+     budget: 50.00,
+     minCases: 5
+   }
+── Response: { suggestedBattle }  → Preview, not created yet
+
+POST   /battles/random/create   → Actually create the random battle
+── Body: { suggestedBattleId }
+
+GET    /battles/history         → User's battle history
+GET    /battles/history/:id     → Detailed battle result with replay data
+
+═══════════════════════════════════════════════════════════════════
+PAYMENTS ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+── DEPOSITS (NOWPayments) ──
+
+GET    /payments/currencies     → List supported crypto currencies
+POST   /payments/deposit        → Create deposit request
+── Body: {
+     amount: 100.00,            → USD amount
+     currency: 'BTC'            → Crypto to pay with
+   }
+── Response: {
+     paymentId,
+     payAddress,
+     payAmount,                 → Amount in crypto
+     expiresAt,
+     qrCodeUrl
+   }
+
+GET    /payments/deposit/:id    → Check deposit status
+POST   /payments/deposit/webhook → NOWPayments IPN webhook (internal)
+
+── WITHDRAWALS (Waxpeer) ──
+
+GET    /withdrawals/skins       → Search available skins on Waxpeer
+       ?query=awp               → Search query
+       ?minPrice=10             → Min price
+       ?maxPrice=500            → Max price
+
+POST   /withdrawals/request     → Request skin withdrawal
+── Body: {
+     waxpeerItemId: '123456',
+     tradeLink: 'https://steamcommunity.com/tradeoffer/...'
+   }
+── Response: { withdrawalId, status, estimatedTime }
+
+GET    /withdrawals/:id         → Check withdrawal status
+GET    /withdrawals/history     → User's withdrawal history
+
+POST   /withdrawals/crypto      → Crypto withdrawal (alternative)
+── Body: {
+     amount: 50.00,
+     currency: 'USDT',
+     address: '0x...'
+   }
+
+═══════════════════════════════════════════════════════════════════
+PROVABLY FAIR ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /fair/seeds              → Get user's current seeds
+POST   /fair/seeds/rotate       → Rotate server seed (reveals old)
+── Response: {
+     revealedSeed: '...',       → Old server seed (can now verify)
+     newServerSeedHash: '...',  → New hashed seed
+     nonce: 0                   → Reset nonce
+   }
+
+GET    /fair/verify/:gameId     → Get verification data for game
+POST   /fair/calculate          → Calculate result from seeds
+── Body: {
+     serverSeed,
+     publicSeed,
+     clientSeed,
+     nonce,
+     gameMode
+   }
+── Response: { rollValue, itemIndex }
+
+═══════════════════════════════════════════════════════════════════
+LEADERBOARD & STATS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /leaderboard/daily       → Daily wagering leaderboard
+GET    /leaderboard/weekly      → Weekly leaderboard
+GET    /leaderboard/monthly     → Monthly leaderboard
+GET    /leaderboard/alltime     → All-time leaderboard
+
+GET    /stats/global            → Global platform stats
+── Response: {
+     totalUsers,
+     totalBattles,
+     totalWagered,
+     biggestWin,
+     onlineNow
+   }
+
+GET    /stats/live              → Live activity feed
+
+═══════════════════════════════════════════════════════════════════
+CHAT ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /chat/:room/history      → Get chat history
+       ?before=timestamp        → Pagination
+       ?limit=50
+
+POST   /chat/:room/message      → Send message (also via Socket.IO)
+DELETE /chat/message/:id        → Delete message (mods only)
+
+═══════════════════════════════════════════════════════════════════
+AFFILIATE ENDPOINTS:
+═══════════════════════════════════════════════════════════════════
+
+GET    /affiliate/stats         → Get affiliate statistics
+GET    /affiliate/referrals     → List referred users
+POST   /affiliate/withdraw      → Withdraw affiliate earnings
+PUT    /affiliate/code          → Update affiliate code
+
+╚═══════════════════════════════════════════════════════════════════╝
+
+ERROR RESPONSES:
+{
+  "success": false,
+  "error": {
+    "code": "INSUFFICIENT_BALANCE",
+    "message": "You don't have enough coins to join this battle",
+    "details": { "required": 50.00, "current": 25.00 }
+  }
+}
+
+COMMON ERROR CODES:
+├── AUTH_REQUIRED          → Not authenticated
+├── AUTH_EXPIRED           → Token expired
+├── FORBIDDEN              → No permission
+├── NOT_FOUND              → Resource not found
+├── INSUFFICIENT_BALANCE   → Not enough coins
+├── BATTLE_FULL            → Battle is full
+├── BATTLE_STARTED         → Battle already started
+├── INVALID_INPUT          → Validation error
+├── RATE_LIMITED           → Too many requests
+└── INTERNAL_ERROR         → Server error
+```
+
+### 2.7 Provably Fair Implementation (Detaljeret)
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║              PROVABLY FAIR SYSTEM - TECHNICAL DEEP DIVE           ║
+╠═══════════════════════════════════════════════════════════════════╣
+
+OVERVIEW:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  Provably Fair sikrer at:                                       │
+│  1. Vi IKKE kan manipulere resultater EFTER bet er placeret    │
+│  2. Brugeren KAN verificere at resultatet var fair             │
+│  3. Resultatet var uforudsigeligt for BEGGE parter             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+SEED COMPONENTS:
+═══════════════════════════════════════════════════════════════════
+
+1. SERVER SEED (Hemmeligt - kontrolleret af os)
+   ├── Genereret: crypto.randomBytes(32).toString('hex')
+   ├── Længde: 64 hex chars (256 bits)
+   ├── Hashet FØR spil: SHA256(serverSeed)
+   ├── Afsløret EFTER seed rotation
+   └── Eksempel: "a1b2c3d4e5f6...64chars"
+
+2. CLIENT SEED (Synligt - kontrolleret af bruger)
+   ├── Default: Genereret ved signup
+   ├── Kan ændres når som helst af bruger
+   ├── Længde: Op til 64 chars
+   └── Eksempel: "MyLuckySeed123"
+
+3. PUBLIC SEED (Synligt - kontrolleret af blockchain)
+   ├── Kilde: EOS blockchain block hash
+   ├── Hentes ved battle/game start
+   ├── Ingen kan forudsige næste block
+   └── Eksempel: "0x7f8a9b...blockHash"
+
+4. NONCE (Tæller)
+   ├── Starter ved 0 for hver ny server seed
+   ├── Øges med 1 for hvert spin/roll
+   ├── Sikrer forskellige resultater per spin
+   └── Eksempel: 0, 1, 2, 3...
+
+═══════════════════════════════════════════════════════════════════
+RESULT GENERATION ALGORITHM:
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+const crypto = require('crypto');
+
+/**
+ * Genererer et provably fair resultat
+ */
+function generateResult(serverSeed, publicSeed, clientSeed, nonce) {
+  // 1. Kombiner alle seeds
+  const combinedSeed = `${serverSeed}:${publicSeed}:${clientSeed}:${nonce}`;
+
+  // 2. Hash kombinationen
+  const hash = crypto.createHmac('sha256', serverSeed)
+    .update(`${publicSeed}:${clientSeed}:${nonce}`)
+    .digest('hex');
+
+  // 3. Tag første 8 hex chars og konverter til nummer
+  const hexSubstring = hash.substring(0, 8);
+  const decimalValue = parseInt(hexSubstring, 16);
+
+  // 4. Normaliser til 0-1 range
+  const rollValue = decimalValue / 0xFFFFFFFF; // Max 32-bit value
+
+  return {
+    hash,
+    rollValue,  // 0.0 til 1.0
+    hexUsed: hexSubstring,
+    decimalValue
+  };
+}
+
+/**
+ * Konverter roll til item baseret på case odds
+ */
+function rollToItem(rollValue, caseItems) {
+  // caseItems er sorteret efter odds_weight (kumulativ)
+  // Eksempel: [
+  //   { item: 'Common', cumulative: 0.70 },    // 70% chance
+  //   { item: 'Uncommon', cumulative: 0.90 },  // 20% chance
+  //   { item: 'Rare', cumulative: 0.98 },      // 8% chance
+  //   { item: 'Legendary', cumulative: 1.00 }  // 2% chance
+  // ]
+
+  for (const item of caseItems) {
+    if (rollValue <= item.cumulative) {
+      return item;
+    }
+  }
+
+  // Fallback (should never happen)
+  return caseItems[caseItems.length - 1];
+}
+
+/**
+ * Verificer et resultat (client-side)
+ */
+function verifyResult(serverSeed, publicSeed, clientSeed, nonce, expectedRoll) {
+  const result = generateResult(serverSeed, publicSeed, clientSeed, nonce);
+  return Math.abs(result.rollValue - expectedRoll) < 0.0000001;
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+BATTLE FLOW (Step by Step):
+═══════════════════════════════════════════════════════════════════
+
+FASE 1: Battle Oprettelse
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. Bruger opretter battle                                      │
+│  2. Server genererer ny SERVER SEED                             │
+│  3. Server hasher seed: serverSeedHash = SHA256(serverSeed)     │
+│  4. serverSeedHash vises til alle (bevis på forudbestemt seed)  │
+│  5. Battle venter på spillere                                   │
+│                                                                 │
+│  ⚠️ VIGTIGT: serverSeedHash SKAL vises FØR nogen joiner!       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+FASE 2: Battle Start
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. Alle spillere er joined                                     │
+│  2. 3-2-1 countdown starter                                     │
+│  3. Ved countdown = 0:                                          │
+│     → Hent SENESTE EOS block hash som PUBLIC SEED               │
+│     → Dette tidspunkt var ukendt før alle joined                │
+│  4. Broadcast publicSeed til alle                               │
+│                                                                 │
+│  Nu er alle seeds låst - ingen kan ændre noget!                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+FASE 3: Runder
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  For hver runde (1 til N):                                      │
+│    For hver spiller:                                            │
+│      1. nonce = (round - 1) * numPlayers + playerPosition       │
+│      2. result = generateResult(                                │
+│           serverSeed,                                           │
+│           publicSeed,                                           │
+│           player.clientSeed,                                    │
+│           nonce                                                 │
+│         )                                                       │
+│      3. item = rollToItem(result.rollValue, case.items)         │
+│      4. Gem result i database                                   │
+│      5. Broadcast result (med nonce + rollValue for verify)     │
+│                                                                 │
+│  ⚠️ Alle spillere bruger SAMME serverSeed + publicSeed         │
+│     Men FORSKELLIGE clientSeed + nonce → forskellige resultater │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+FASE 4: Battle Slut
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. Afgør vinder baseret på mode (højeste/laveste/jackpot)      │
+│  2. Krediter vinder                                             │
+│  3. REVEAL SERVER SEED til alle spillere                        │
+│  4. Nu kan alle verificere:                                     │
+│     - At SHA256(revealedSeed) === serverSeedHash (vist før)     │
+│     - At alle rolls matcher med de revealed seeds               │
+│                                                                 │
+│  ✅ FAIR GAME BEVIST!                                           │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════
+EOS BLOCKCHAIN INTEGRATION:
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+const { JsonRpc } = require('eosjs');
+
+const rpc = new JsonRpc('https://eos.greymass.com');
+
+async function getEOSBlockHash() {
+  // Hent seneste irreversible block
+  const info = await rpc.get_info();
+  const blockNum = info.last_irreversible_block_num;
+
+  // Hent block data
+  const block = await rpc.get_block(blockNum);
+
+  return {
+    blockNum,
+    blockHash: block.id,
+    timestamp: block.timestamp
+  };
+}
+
+// Eksempel output:
+// {
+//   blockNum: 341234567,
+//   blockHash: "0abc123def456789...",
+//   timestamp: "2025-01-15T12:34:56.000"
+// }
+```
+
+HVORFOR EOS?
+├── Hurtige blocks (0.5 sekunder)
+├── Deterministisk finality
+├── Gratis at læse (ingen API key)
+├── Umanipulerbar af os
+└── Industri standard for gambling sites
+
+═══════════════════════════════════════════════════════════════════
+CRAZY MODE (Laveste vinder):
+═══════════════════════════════════════════════════════════════════
+
+```javascript
+function determineWinner(mode, playerResults) {
+  if (mode === 'normal') {
+    // Højeste totalværdi vinder
+    return playerResults.reduce((winner, player) =>
+      player.totalValue > winner.totalValue ? player : winner
+    );
+  }
+
+  if (mode === 'crazy') {
+    // Laveste totalværdi vinder
+    return playerResults.reduce((winner, player) =>
+      player.totalValue < winner.totalValue ? player : winner
+    );
+  }
+
+  if (mode === 'jackpot') {
+    // Proportionel chance baseret på værdi
+    const totalPool = playerResults.reduce((sum, p) => sum + p.totalValue, 0);
+    const roll = Math.random(); // Note: Også provably fair!
+
+    let cumulative = 0;
+    for (const player of playerResults) {
+      cumulative += player.totalValue / totalPool;
+      if (roll <= cumulative) {
+        return player;
+      }
+    }
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════════
+CLIENT-SIDE VERIFICATION UI:
+═══════════════════════════════════════════════════════════════════
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  ⚖️ VERIFY BATTLE #12345                                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Server Seed Hash (shown before):                               │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 7f8a9b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Revealed Server Seed:                                          │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Public Seed (EOS Block #341234567):                            │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ 0abc123def456789abcdef0123456789abcdef0123456789abcdef │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  Your Client Seed:                                              │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ MyLuckySeed123                                           │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  ✅ Server Seed Hash Matches: SHA256(revealed) = hash           │
+│                                                                 │
+│  ROUND RESULTS:                                                 │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │ Round │ Nonce │ Roll      │ Item           │ Verified  │   │
+│  │ ──────────────────────────────────────────────────────│   │
+│  │   1   │   0   │ 0.234567  │ AWP Asiimov    │ ✅        │   │
+│  │   2   │   2   │ 0.891234  │ Glock Fade     │ ✅        │   │
+│  │   3   │   4   │ 0.012345  │ Karambit Fade  │ ✅        │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                                                                 │
+│  [ Copy Verification Data ]  [ Verify on 3rd Party Site ]       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+╚═══════════════════════════════════════════════════════════════════╝
 ```
 
 ---
@@ -302,7 +1371,208 @@ HVORFOR DETTE ER GENIALT:
 └── Let at implementere (random selection fra arrays)
 ```
 
-### 3.2 Custom Case Creator (KERNE FEATURE)
+#### 3.1.8 💎 EMERALD SPIN (Premium Reveal Animation)
+
+> Inspireret af CSGOEmpire's "Empire Spin", CSGORoll's "Roll Spin" og Rain.gg's "Rain Spin"
+
+```
+HVAD ER EMERALD SPIN?
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  Emerald Spin er en special animation der aktiveres når     │
+│  brugeren rammer et HIGH-VALUE item (lav sandsynlighed).    │
+│                                                             │
+│  I stedet for bare at vise resultatet:                      │
+│  1. Spinneren stopper på et "mystisk" felt                  │
+│  2. Skærmen får emerald glow effect                         │
+│  3. Special reveal animation afspilles                      │
+│  4. Det rare item afsløres med celebration                  │
+│                                                             │
+│  Dette bygger MASSIV spænding og gør wins mere mindeværdige │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+HVORNÅR AKTIVERES DET?
+├── Covert items (rød rarity)
+├── Knive / Handsker (guld rarity)
+├── Items over en vis værdi (f.eks. 10x case pris)
+└── Kan toggles ON/OFF af bruger (som på CSGOEmpire)
+
+ANIMATION FLOW:
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  NORMAL SPIN:                                               │
+│  [item][item][item][WINNER][item][item]                     │
+│                 ↓                                           │
+│           Vis resultat                                      │
+│                                                             │
+│  ════════════════════════════════════════════════════════   │
+│                                                             │
+│  EMERALD SPIN (når high-value):                             │
+│  [item][item][item][ ? ? ? ][item][item]                    │
+│                 ↓                                           │
+│  ┌─────────────────────────────────────┐                   │
+│  │     💎 EMERALD SPIN ACTIVATED 💎    │                   │
+│  │                                      │                   │
+│  │    ╔═══════════════════════════╗    │                   │
+│  │    ║                           ║    │                   │
+│  │    ║     [Glowing ? box]       ║    │                   │
+│  │    ║                           ║    │                   │
+│  │    ╚═══════════════════════════╝    │                   │
+│  │                                      │                   │
+│  │    Green particles swirling...       │                   │
+│  │                                      │                   │
+│  └─────────────────────────────────────┘                   │
+│                 ↓                                           │
+│         (2-3 sekunder later)                               │
+│                 ↓                                           │
+│  ┌─────────────────────────────────────┐                   │
+│  │     🎉 CONGRATULATIONS! 🎉          │                   │
+│  │                                      │                   │
+│  │    ╔═══════════════════════════╗    │                   │
+│  │    ║   🔪 Karambit | Emerald   ║    │                   │
+│  │    ║      $12,450.00           ║    │                   │
+│  │    ╚═══════════════════════════╝    │                   │
+│  │                                      │                   │
+│  │    [Confetti + Screen shake]         │                   │
+│  │                                      │                   │
+│  └─────────────────────────────────────┘                   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+UI TOGGLE (som CSGOEmpire):
+┌─────────────────────────────────────────────────────────────┐
+│  💎 Emerald Spin                              [====●]  ON   │
+│  Toggle to highlight premium items during case openings     │
+└─────────────────────────────────────────────────────────────┘
+
+IMPLEMENTATION:
+├── Frontend: Check if result.value > threshold BEFORE animation
+├── Hvis ja: Trigger EmeraldSpin component i stedet
+├── EmeraldSpin har egen animation timeline (GSAP/Framer)
+├── Sound effects: Mystisk buildup → reveal fanfare
+├── Particles: Emerald grønne particles (Canvas)
+└── Gemmes i user preferences (localStorage + DB)
+
+TECHNICAL FLOW:
+```javascript
+async function spinCase(caseId) {
+  const result = await api.openCase(caseId);
+
+  // Check if Emerald Spin should trigger
+  const isEmeraldSpin =
+    userSettings.emeraldSpinEnabled &&
+    (result.item.rarity >= RARITY.COVERT ||
+     result.item.value >= case.price * 10);
+
+  if (isEmeraldSpin) {
+    // Play mystery animation (hides actual result)
+    await playMysterySpinAnimation();
+    // Trigger Emerald reveal
+    await playEmeraldReveal(result.item);
+  } else {
+    // Normal spin animation
+    await playNormalSpinAnimation(result.item);
+  }
+}
+```
+
+HVORFOR DET ER VIGTIGT:
+├── Øger excitement MASSIVT for big wins
+├── Gør platformen mere "premium" feeling
+├── Streamers elsker det (content moments)
+├── Differentierer os fra basic sites
+├── Brugere føler sig specielle
+└── Kan bruges i marketing (highlight clips)
+```
+
+### 3.2 Create Battle Interface (CSGOEmpire-style)
+
+```
+CREATE BATTLE PAGE:
+┌─────────────────────────────────────────────────────────────┐
+│  ← Back to Battles              CREATE BATTLE               │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  BATTLE TYPE:                                               │
+│  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐          │
+│  │   ⚔️        │ │   👥        │ │   🤝        │          │
+│  │  Standard   │ │   Shared    │ │    Team     │          │
+│  │  Battle     │ │   Battle    │ │   Battle    │          │
+│  │             │ │             │ │             │          │
+│  │ 1v1  1v1v1  │ │   2  3  4   │ │     2v2     │          │
+│  │    1v1v1v1  │ │             │ │             │          │
+│  └─────────────┘ └─────────────┘ └─────────────┘          │
+│       [●]             [ ]             [ ]                   │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  0 Cases Selected                      Total Value: 💰 0.00 │
+│                                                             │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │                                                      │   │
+│  │                    [+]                               │   │
+│  │                 Add Cases                            │   │
+│  │                                                      │   │
+│  │   (Klik for at vælge cases fra katalog)             │   │
+│  │                                                      │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  BATTLE OPTIONS:                                            │
+│                                                             │
+│  ┌─────────────────────────────┐ ┌─────────────────────┐   │
+│  │ 💎 Emerald Spin       [●══] │ │ 🔄 Uno Reverse  [ ] │   │
+│  │ Highlight premium items     │ │ Lowest value wins!  │   │
+│  │ during case openings        │ │                     │   │
+│  └─────────────────────────────┘ └─────────────────────┘   │
+│                                                             │
+│  ┌─────────────────────────────┐ ┌─────────────────────┐   │
+│  │ ⚡ Fast Mode          [ ]   │ │ 🔒 Private Battle[] │   │
+│  │ Speeds up case battles      │ │ Only players with   │   │
+│  │ significantly               │ │ link can join/view  │   │
+│  └─────────────────────────────┘ └─────────────────────┘   │
+│                                                             │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│                    Total Cost: 💰 0.00    [Create Battle]   │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+
+BATTLE MODES FORKLARET:
+├── Standard Battle: Alle spillere mod hinanden, højeste vinder
+├── Shared Battle: 2-4 spillere deler samme cases (ikke versus)
+├── Team Battle: 2v2, holdets samlede værdi afgør vinder
+└── + Vores unikke modes (Crazy, Cursed, Progressive, Mystery)
+
+BATTLE OPTIONS:
+├── Emerald Spin: Aktiverer premium reveal animation
+├── Uno Reverse (Crazy Mode): Laveste værdi vinder
+├── Fast Mode: Hurtigere spin animations
+└── Private Battle: Kun via invite link
+
+CASE SELECTOR MODAL:
+┌─────────────────────────────────────────────────────────────┐
+│  SELECT CASES                                    [X]        │
+├─────────────────────────────────────────────────────────────┤
+│  🔍 Search cases...                                         │
+│                                                             │
+│  [Featured] [Low Risk] [Medium Risk] [High Risk] [Custom]   │
+│                                                             │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐   │
+│  │  Case  │ │  Case  │ │  Case  │ │  Case  │ │  Case  │   │
+│  │   1    │ │   2    │ │   3    │ │   4    │ │   5    │   │
+│  │ 💰25.00│ │ 💰50.00│ │💰100.00│ │💰250.00│ │💰500.00│   │
+│  │  [+]   │ │  [+]   │ │  [+]   │ │  [+]   │ │  [+]   │   │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘   │
+│                                                             │
+│  Selected: [Case1 x2] [Case3 x1]           Total: 💰 150.00│
+│                                             [Add to Battle] │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 Custom Case Creator (KERNE FEATURE)
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -1308,6 +2578,313 @@ KYC LEVELS:
     ├── Proof of address
     ├── Source of funds
     └── Unlimited withdrawals
+```
+
+### 8.4 🚨 KRITISK: Anti-Manipulation & Game Integrity
+
+> **DETTE ER DET VIGTIGSTE AFSNIT I HELE DOKUMENTET**
+> En eneste sårbarhed kan koste millioner og ødelægge vores omdømme permanent.
+
+```
+╔═══════════════════════════════════════════════════════════════════╗
+║        🚨 KRITISKE SIKKERHEDSRISICI FOR GAMBLING SITES 🚨         ║
+╠═══════════════════════════════════════════════════════════════════╣
+
+RISIKO 1: RESULT MANIPULATION (Intern trussel)
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: En medarbejder/developer ændrer RNG eller seed generation
+         for at give sig selv eller venner bedre odds.
+
+KONSEKVENS: Millioner i uretmæssige udbetalinger + permanent
+            troværdighedstab hvis opdaget.
+
+FOREBYGGELSE:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  1. CODE REVIEW KRAV                                            │
+│     ├── ALL changes til RNG/provably fair kræver 2+ reviews    │
+│     ├── Audit trail på alle code changes                        │
+│     └── Separate prod deployment keys (ikke devs)               │
+│                                                                 │
+│  2. SERVER SEED ISOLATION                                       │
+│     ├── Server seeds genereres af separat microservice          │
+│     ├── Ingen direkte database adgang til seed storage          │
+│     ├── HSM (Hardware Security Module) til seed generation      │
+│     └── Audit logs på alle seed operations                      │
+│                                                                 │
+│  3. TRANSPARENCY                                                │
+│     ├── Alle resultater logges immutable (append-only)          │
+│     ├── Public seed fra EOS blockchain = umanipulerbar          │
+│     ├── Brugere kan ALTID verificere resultater                 │
+│     └── Tredjepartsaudit af RNG årligt                          │
+│                                                                 │
+│  4. PRINCIPLE OF LEAST PRIVILEGE                                │
+│     ├── Devs har IKKE prod database access                      │
+│     ├── Ingen kan ændre gamle resultater                        │
+│     ├── Admin actions kræver 2-person approval                  │
+│     └── All sensitive ops kræver MFA                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+RISIKO 2: TIMING ATTACKS (Ekstern trussel)
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Angriber forudsiger næste EOS block hash før vi henter den,
+         eller udnytter race conditions.
+
+FOREBYGGELSE:
+├── Hent EOS block hash på et UFORUDSIGELIGT tidspunkt
+├── Brug last_irreversible_block (ikke head block)
+├── Implementer jitter/random delay på block fetch
+├── Valider at block timestamp er recent
+└── Multiple EOS node endpoints som fallback
+
+RISIKO 3: SEED PREDICTION/BRUTE FORCE
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Angriber gætter server seed via brute force.
+
+FOREBYGGELSE:
+├── 256-bit server seeds (2^256 kombinationer = impossible)
+├── crypto.randomBytes() - kryptografisk secure
+├── Rate limit på verification endpoints
+└── Server seed roteres automatisk efter X spins
+
+RISIKO 4: REPLAY ATTACKS
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Angriber genbruger gamle resultater eller manipulerer nonce.
+
+FOREBYGGELSE:
+├── Monotonisk stigende nonce per user seed
+├── Nonce stored server-side (ikke client-controlled)
+├── Unique constraint i database på (userId, nonce)
+└── Reject any out-of-order nonce
+
+RISIKO 5: MULTI-ACCOUNT ABUSE
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Samme person har flere konti for at udnytte bonusser eller
+         collude i battles.
+
+FOREBYGGELSE:
+├── Steam account binding (én konto per Steam)
+├── Device fingerprinting (browser/hardware)
+├── IP tracking + VPN detection
+├── Same IP kan ikke være i samme battle
+├── Statistical analysis af suspicious patterns
+├── Phone verification for withdrawals
+└── Manual review ved flag
+
+RISIKO 6: WITHDRAWAL FRAUD
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Angriber stjæler konto og withdrawer alt, eller finder måde
+         at generere falsk balance.
+
+FOREBYGGELSE:
+├── Balance changes KUN via transaktioner (audit trail)
+├── Double-entry bookkeeping i database
+├── Withdrawal cooldown for nye konti (24-48 timer)
+├── Large withdrawal kræver extra verification
+├── Trade link verification mod Steam API
+├── 2FA påkrævet for withdrawals
+└── Email notification ved alle withdrawals
+
+RISIKO 7: API ABUSE / RATE LIMIT BYPASS
+─────────────────────────────────────────────────────────────────────
+TRUSSEL: Bot automation til at udnytte edge cases eller overloade system.
+
+FOREBYGGELSE:
+├── Per-endpoint rate limiting
+├── Per-user rate limiting
+├── IP-based rate limiting
+├── Captcha ved suspicious patterns
+├── Request fingerprinting
+└── Anomaly detection (unusual patterns)
+
+╚═══════════════════════════════════════════════════════════════════╝
+```
+
+### 8.5 Sikker Kode Praksis
+
+```javascript
+// ❌ ALDRIG GØR DETTE:
+const serverSeed = "hardcoded_seed";  // KATASTROFE!
+const result = Math.random();         // Ikke kryptografisk secure!
+const sql = `SELECT * FROM users WHERE id = ${userId}`;  // SQL injection!
+
+// ✅ ALTID GØR DETTE:
+import crypto from 'crypto';
+
+// Kryptografisk secure random
+const serverSeed = crypto.randomBytes(32).toString('hex');
+
+// Parameterized queries
+const result = await db.query(
+  'SELECT * FROM users WHERE id = $1',
+  [userId]
+);
+
+// Input validation
+import { z } from 'zod';
+
+const BattleJoinSchema = z.object({
+  battleId: z.string().uuid(),
+  position: z.number().int().min(0).max(3),
+  team: z.number().int().min(0).max(1).nullable()
+});
+
+// Validate before processing
+const validated = BattleJoinSchema.parse(input);
+```
+
+### 8.6 Database Integrity
+
+```sql
+-- KRITISKE CONSTRAINTS:
+
+-- Balance kan ALDRIG gå negativ
+ALTER TABLE users ADD CONSTRAINT balance_non_negative
+  CHECK (balance >= 0);
+
+-- Transactions må have valid reference
+ALTER TABLE transactions ADD CONSTRAINT valid_reference
+  CHECK (
+    (reference_type IS NULL AND reference_id IS NULL) OR
+    (reference_type IS NOT NULL AND reference_id IS NOT NULL)
+  );
+
+-- Nonce må være unik per user seed
+CREATE UNIQUE INDEX unique_nonce_per_seed
+  ON battle_rounds(participant_id, nonce);
+
+-- Audit log (append-only)
+CREATE TABLE audit_log (
+  id BIGSERIAL PRIMARY KEY,
+  timestamp TIMESTAMP DEFAULT NOW(),
+  user_id UUID,
+  action VARCHAR(100) NOT NULL,
+  details JSONB NOT NULL,
+  ip_address INET,
+  user_agent TEXT
+);
+
+-- Ingen kan DELETE fra audit_log
+REVOKE DELETE ON audit_log FROM PUBLIC;
+
+-- Trigger til at logge alle balance changes
+CREATE OR REPLACE FUNCTION log_balance_change()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.balance != NEW.balance THEN
+    INSERT INTO audit_log (user_id, action, details)
+    VALUES (
+      NEW.id,
+      'balance_change',
+      jsonb_build_object(
+        'old_balance', OLD.balance,
+        'new_balance', NEW.balance,
+        'change', NEW.balance - OLD.balance
+      )
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER balance_audit_trigger
+  AFTER UPDATE ON users
+  FOR EACH ROW EXECUTE FUNCTION log_balance_change();
+```
+
+### 8.7 Real-time Monitoring & Alerts
+
+```
+KRITISKE ALERTS (Øjeblikkelig notifikation):
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  🚨 LEVEL 1 - CRITICAL (SMS + Call + Slack)                    │
+│  ├── Unusual withdrawal spike (>$10k/hour)                      │
+│  ├── Multiple failed admin logins                               │
+│  ├── Database anomaly detected                                  │
+│  ├── RNG service down                                           │
+│  └── Negative balance detected (should be impossible!)          │
+│                                                                 │
+│  ⚠️ LEVEL 2 - WARNING (Slack + Email)                          │
+│  ├── High loss rate for platform (house losing money)           │
+│  ├── Suspicious betting pattern detected                        │
+│  ├── Multiple accounts from same device                         │
+│  ├── Large single bet (>$1000)                                  │
+│  └── Failed provably fair verification                          │
+│                                                                 │
+│  📊 LEVEL 3 - INFO (Dashboard only)                            │
+│  ├── Daily statistics summary                                   │
+│  ├── New user registrations                                     │
+│  ├── Withdrawal queue status                                    │
+│  └── System performance metrics                                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+MONITORING STACK:
+├── Grafana → Dashboards & visualization
+├── Prometheus → Metrics collection
+├── Loki → Log aggregation
+├── AlertManager → Alert routing
+└── PagerDuty/Opsgenie → On-call rotation
+```
+
+### 8.8 Incident Response Plan
+
+```
+VED MISTANKE OM MANIPULATION/HACK:
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  STEP 1: STOP BLEEDING (Inden for 5 minutter)                  │
+│  ├── Pause alle withdrawals                                     │
+│  ├── Pause nye battles/games                                    │
+│  ├── Alert hele teamet                                          │
+│  └── Start dokumentation                                        │
+│                                                                 │
+│  STEP 2: ASSESS (Inden for 30 minutter)                        │
+│  ├── Identificer omfang af problemet                            │
+│  ├── Gennemgå audit logs                                        │
+│  ├── Identificer berørte brugere                                │
+│  └── Vurder økonomisk impact                                    │
+│                                                                 │
+│  STEP 3: CONTAIN (Inden for 1 time)                            │
+│  ├── Bloker mistænkelige konti                                  │
+│  ├── Reverser uretmæssige transaktioner                         │
+│  ├── Patch sårbarheden                                          │
+│  └── Verificer fix virker                                       │
+│                                                                 │
+│  STEP 4: RECOVER (Inden for 24 timer)                          │
+│  ├── Genaktiver services                                        │
+│  ├── Kommuniker til brugere (hvis nødvendigt)                   │
+│  ├── Kompenser berørte brugere                                  │
+│  └── Full post-mortem rapport                                   │
+│                                                                 │
+│  STEP 5: PREVENT (Inden for 1 uge)                             │
+│  ├── Implementer permanent fix                                  │
+│  ├── Audit for lignende sårbarheder                             │
+│  ├── Opdater security procedures                                │
+│  └── Team debrief                                               │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 8.9 Third-Party Security Audits
+
+```
+PÅKRÆVEDE AUDITS:
+├── Årlig penetration test (ekstern firma)
+├── Kvartalsvis code review af RNG system
+├── Månedlig vulnerability scan
+└── Kontinuerlig bug bounty program
+
+ANBEFALEDE AUDIT FIRMAER:
+├── Trail of Bits (crypto/blockchain focus)
+├── Cure53 (web application security)
+├── NCC Group (comprehensive audits)
+└── Hackerone/Bugcrowd (bug bounty platforms)
+
+BUDGET: $10,000-50,000/år for audits
+(VIGTIG investering - billigere end et hack!)
 ```
 
 ---
