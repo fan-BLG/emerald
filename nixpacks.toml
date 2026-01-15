@@ -5,7 +5,7 @@ nixPkgs = ["nodejs_20", "pnpm"]
 cmds = ["pnpm install"]
 
 [phases.build]
-cmds = ["pnpm --filter @emerald/api run db:generate"]
+cmds = ["cd apps/api && pnpm run db:generate"]
 
 [start]
 cmd = "cd apps/api && pnpm run start"
