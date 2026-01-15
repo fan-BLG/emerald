@@ -97,7 +97,7 @@ export async function getEOSBlockHash(): Promise<{
   try {
     // Use EOS public API
     const infoResponse = await fetch('https://eos.greymass.com/v1/chain/get_info');
-    const info = await infoResponse.json();
+    const info = await infoResponse.json() as any;
 
     const blockNum = info.last_irreversible_block_num;
 
@@ -106,7 +106,7 @@ export async function getEOSBlockHash(): Promise<{
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ block_num_or_id: blockNum }),
     });
-    const block = await blockResponse.json();
+    const block = await blockResponse.json() as any;
 
     return {
       blockNum,

@@ -294,7 +294,7 @@ export async function fairRoutes(fastify: FastifyInstance) {
       data: {
         hash: result.hash,
         rollValue: result.rollValue,
-        percentage: result.percentage,
+        percentage: result.rollValue * 100,
       },
     };
   });

@@ -344,7 +344,7 @@ export const battleRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string };
     const userId = (request.user as any).id;
 
-    const parseResult = joinBattleSchema.safeParse({ ...request.body, battleId: id });
+    const parseResult = joinBattleSchema.safeParse({ ...(request.body as any), battleId: id });
     if (!parseResult.success) {
       return reply.code(400).send({
         success: false,

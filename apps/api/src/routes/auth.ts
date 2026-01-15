@@ -58,7 +58,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       const profileResponse = await fetch(
         `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${STEAM_API_KEY}&steamids=${steamId}`
       );
-      const profileData = await profileResponse.json();
+      const profileData = await profileResponse.json() as any;
       const profile = profileData.response?.players?.[0];
 
       if (!profile) {
