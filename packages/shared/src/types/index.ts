@@ -304,14 +304,19 @@ export interface ServerToClientEvents {
   'battle:playerJoined': (data: { battleId: string; position: number; player: UserPublic }) => void;
   'battle:playerLeft': (data: { battleId: string; position: number; userId: string }) => void;
   'battle:starting': (data: { battleId: string; countdown: number; publicSeed: string }) => void;
+  'battle:countdown': (data: { countdown: number }) => void;
+  'battle:started': (data: { publicSeed: string }) => void;
   'battle:roundStart': (data: { battleId: string; round: number; totalRounds: number; case: Case }) => void;
-  'battle:roundResult': (data: BattleRoundResultEvent) => void;
-  'battle:finished': (data: BattleFinishedEvent) => void;
+  'battle:roundResult': (data: any) => void;
+  'battle:roundComplete': (data: { roundNumber: number }) => void;
+  'battle:finished': (data: any) => void;
   'battle:cancelled': (data: { battleId: string; reason: string; refunded: boolean }) => void;
 
   // Chat
   'chat:message': (message: ChatMessage) => void;
   'chat:deleted': (data: { messageId: string }) => void;
+  'chat:history': (data: { messages: ChatMessage[] }) => void;
+  'chat:onlineCount': (data: { count: number }) => void;
 
   // Global
   'global:bigWin': (data: BigWinEvent) => void;
@@ -357,6 +362,7 @@ export interface ClientToServerEvents {
 
   // Chat
   'chat:message': (data: { room: string; message: string }) => void;
+  'chat:send': (data: { room: string; message: string }) => void;
   'chat:join': (data: { room: string }) => void;
   'chat:leave': (data: { room: string }) => void;
 

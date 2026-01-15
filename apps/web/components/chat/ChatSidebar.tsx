@@ -13,7 +13,7 @@ interface ChatMessage {
   user: {
     id: string;
     username: string;
-    avatarUrl?: string;
+    avatarUrl?: string | null;
     level: number;
     vipTier: string;
   };
@@ -26,7 +26,7 @@ interface ChatSidebarProps {
   onToggle: () => void;
 }
 
-const ROOMS = [
+const ROOMS: { id: string; name: string; icon?: typeof Globe; flag?: string }[] = [
   { id: 'global', name: 'Global', icon: Globe },
   { id: 'english', name: 'English', flag: '🇬🇧' },
   { id: 'danish', name: 'Danish', flag: '🇩🇰' },
@@ -55,12 +55,12 @@ export function ChatSidebar({ isOpen, onToggle }: ChatSidebarProps) {
       setMessages((prev) => [...prev.slice(-99), message]); // Keep last 100 messages
     };
 
-    const handleHistory = (history: ChatMessage[]) => {
-      setMessages(history);
+    const handleHistory = (data: { messages: ChatMessage[] }) => {
+      setMessages(data.messages);
     };
 
-    const handleOnlineCount = (count: number) => {
-      setOnlineCount(count);
+    const handleOnlineCount = (data: { count: number }) => {
+      setOnlineCount(data.count);
     };
 
     socket.on('chat:message', handleNewMessage);
@@ -155,7 +155,7 @@ export function ChatSidebar({ isOpen, onToggle }: ChatSidebarProps) {
                         : 'text-gray-400 hover:text-white hover:bg-dark-lighter'
                     )}
                   >
-                    {room.flag || <room.icon className="w-4 h-4 mx-auto" />}
+                    {room.flag ? room.flag : room.icon && <room.icon className="w-4 h-4 mx-auto" />}
                   </button>
                 ))}
               </div>

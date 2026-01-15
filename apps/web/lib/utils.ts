@@ -41,8 +41,8 @@ export function formatCompact(num: number): string {
 }
 
 // Get rarity color
-export function getRarityColor(rarity: SkinRarity): string {
-  const colors: Record<SkinRarity, string> = {
+export function getRarityColor(rarity: string): string {
+  const colors: Record<string, string> = {
     consumer: '#b0c3d9',
     industrial: '#5e98d9',
     milspec: '#4b69ff',
@@ -51,11 +51,11 @@ export function getRarityColor(rarity: SkinRarity): string {
     covert: '#eb4b4b',
     contraband: '#e4ae39',
   };
-  return colors[rarity];
+  return colors[rarity] || '#b0c3d9';
 }
 
 // Get rarity class name
-export function getRarityClassName(rarity: SkinRarity): string {
+export function getRarityClassName(rarity: string): string {
   return `border-rarity-${rarity} bg-rarity-${rarity}`;
 }
 
