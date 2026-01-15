@@ -2,11 +2,11 @@
 nixPkgs = ["nodejs_20", "pnpm"]
 
 [phases.install]
-cmds = ["pnpm install --frozen-lockfile"]
+cmds = ["pnpm install"]
 
 [phases.build]
 cmds = [
-  "pnpm --filter @emerald/shared build || true",
+  "pnpm --filter @emerald/shared build",
   "pnpm --filter @emerald/api run db:generate",
   "pnpm --filter @emerald/api run build"
 ]
