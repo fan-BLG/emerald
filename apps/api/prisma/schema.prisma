@@ -1,0 +1,364 @@
+// Emerald Database Schema
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== USERS ====================
+model User {
+  id                  String   @id @default(uuid())
+  steamId             String   @unique @map("steam_id")
+  username            String
+  avatarUrl           String?  @map("avatar_url")
+  email               String?
+
+  // Balance & Economy
+  balance             Decimal  @default(0) @db.Decimal(18, 2)
+  totalDeposited      Decimal  @default(0) @map("total_deposited") @db.Decimal(18, 2)
+  totalWithdrawn      Decimal  @default(0) @map("total_withdrawn") @db.Decimal(18, 2)
+  totalWagered        Decimal  @default(0) @map("total_wagered") @db.Decimal(18, 2)
+  totalWon            Decimal  @default(0) @map("total_won") @db.Decimal(18, 2)
+
+  // Leveling
+  level               Int      @default(1)
+  xp                  BigInt   @default(0)
+  vipTier             String   @default("bronze") @map("vip_tier")
+
+  // Settings
+  emeraldSpinEnabled  Boolean  @default(true) @map("emerald_spin_enabled")
+  clientSeed          String?  @map("client_seed")
+
+  // Security
+  isBanned            Boolean  @default(false) @map("is_banned")
+  banReason           String?  @map("ban_reason")
+  is2faEnabled        Boolean  @default(false) @map("is_2fa_enabled")
+
+  // Timestamps
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  lastLoginAt         DateTime? @map("last_login_at")
+
+  // Relations
+  battles             BattleParticipant[]
+  createdBattles      Battle[]            @relation("BattleCreator")
+  wonBattles          Battle[]            @relation("BattleWinner")
+  transactions        Transaction[]
+  cryptoDeposits      CryptoDeposit[]
+  skinWithdrawals     SkinWithdrawal[]
+  userSeeds           UserSeed[]
+  chatMessages        ChatMessage[]
+  customCases         Case[]              @relation("CaseCreator")
+
+  @@map("users")
+}
+
+// ==================== SKINS ====================
+model Skin {
+  id              String   @id @default(uuid())
+  name            String
+  marketHashName  String   @unique @map("market_hash_name")
+  imageUrl        String   @map("image_url")
+
+  rarity          String
+  weaponType      String?  @map("weapon_type")
+  collection      String?
+  exterior        String?
+  isStattrak      Boolean  @default(false) @map("is_stattrak")
+
+  displayPrice    Decimal? @map("display_price") @db.Decimal(18, 2)
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  caseItems       CaseItem[]
+
+  @@map("skins")
+}
+
+// ==================== CASES ====================
+model Case {
+  id              String   @id @default(uuid())
+  name            String
+  slug            String   @unique
+  imageUrl        String   @map("image_url")
+
+  price           Decimal  @db.Decimal(18, 2)
+  houseEdge       Decimal  @default(8) @map("house_edge") @db.Decimal(5, 2)
+
+  isCustom        Boolean  @default(false) @map("is_custom")
+  creatorId       String?  @map("creator_id")
+  isFeatured      Boolean  @default(false) @map("is_featured")
+  isActive        Boolean  @default(true) @map("is_active")
+
+  totalOpened     BigInt   @default(0) @map("total_opened")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  creator         User?       @relation("CaseCreator", fields: [creatorId], references: [id])
+  items           CaseItem[]
+  battleCases     BattleCase[]
+
+  @@map("cases")
+}
+
+// ==================== CASE ITEMS ====================
+model CaseItem {
+  id              String   @id @default(uuid())
+  caseId          String   @map("case_id")
+  skinId          String   @map("skin_id")
+
+  coinValue       Decimal  @map("coin_value") @db.Decimal(18, 2)
+  oddsWeight      Int      @map("odds_weight")
+  oddsPercentage  Decimal? @map("odds_percentage") @db.Decimal(8, 5)
+
+  // Relations
+  case            Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  skin            Skin     @relation(fields: [skinId], references: [id])
+  battleRounds    BattleRound[]
+
+  @@unique([caseId, skinId])
+  @@map("case_items")
+}
+
+// ==================== BATTLES ====================
+model Battle {
+  id              String   @id @default(uuid())
+
+  type            String   // standard/team/shared
+  mode            String   // normal/crazy/cursed/progressive/mystery
+  maxPlayers      Int      @map("max_players")
+  teamSize        Int      @default(1) @map("team_size")
+
+  isPrivate       Boolean  @default(false) @map("is_private")
+  privateCode     String?  @map("private_code")
+  isFastMode      Boolean  @default(false) @map("is_fast_mode")
+  emeraldSpin     Boolean  @default(true) @map("emerald_spin")
+
+  status          String   @default("waiting") // waiting/starting/in_progress/finished/cancelled
+  currentRound    Int      @default(0) @map("current_round")
+  totalRounds     Int      @map("total_rounds")
+
+  costPerPlayer   Decimal  @map("cost_per_player") @db.Decimal(18, 2)
+  totalValue      Decimal  @default(0) @map("total_value") @db.Decimal(18, 2)
+
+  // Provably Fair
+  serverSeed      String   @map("server_seed")
+  serverSeedHash  String   @map("server_seed_hash")
+  publicSeed      String?  @map("public_seed")
+
+  // Results
+  winnerId        String?  @map("winner_id")
+  winningTeam     Int?     @map("winning_team")
+
+  // Creator
+  createdById     String   @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  startedAt       DateTime? @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  // Relations
+  creator         User     @relation("BattleCreator", fields: [createdById], references: [id])
+  winner          User?    @relation("BattleWinner", fields: [winnerId], references: [id])
+  participants    BattleParticipant[]
+  cases           BattleCase[]
+  rounds          BattleRound[]
+
+  @@map("battles")
+}
+
+// ==================== BATTLE CASES ====================
+model BattleCase {
+  id              String   @id @default(uuid())
+  battleId        String   @map("battle_id")
+  caseId          String   @map("case_id")
+  roundNumber     Int      @map("round_number")
+
+  // Relations
+  battle          Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  case            Case     @relation(fields: [caseId], references: [id])
+
+  @@unique([battleId, roundNumber])
+  @@map("battle_cases")
+}
+
+// ==================== BATTLE PARTICIPANTS ====================
+model BattleParticipant {
+  id              String   @id @default(uuid())
+  battleId        String   @map("battle_id")
+  userId          String   @map("user_id")
+
+  position        Int
+  team            Int?
+
+  totalValue      Decimal  @default(0) @map("total_value") @db.Decimal(18, 2)
+  isWinner        Boolean  @default(false) @map("is_winner")
+
+  joinedAt        DateTime @default(now()) @map("joined_at")
+
+  // Relations
+  battle          Battle   @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id])
+  rounds          BattleRound[]
+
+  @@unique([battleId, userId])
+  @@unique([battleId, position])
+  @@map("battle_participants")
+}
+
+// ==================== BATTLE ROUNDS ====================
+model BattleRound {
+  id                    String   @id @default(uuid())
+  battleId              String   @map("battle_id")
+  participantId         String   @map("participant_id")
+  roundNumber           Int      @map("round_number")
+
+  caseItemId            String   @map("case_item_id")
+  coinValue             Decimal  @map("coin_value") @db.Decimal(18, 2)
+
+  // Denormalized skin info for quick access
+  skinName              String?  @map("skin_name")
+  skinImage             String?  @map("skin_image")
+  skinRarity            String?  @map("skin_rarity")
+
+  // Provably fair
+  nonce                 Int
+  rollHash              String?  @map("roll_hash")
+  rollValue             Decimal  @map("roll_value") @db.Decimal(20, 10)
+
+  triggeredEmeraldSpin  Boolean  @default(false) @map("triggered_emerald_spin")
+
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  // Relations
+  battle                Battle           @relation(fields: [battleId], references: [id], onDelete: Cascade)
+  participant           BattleParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  caseItem              CaseItem         @relation(fields: [caseItemId], references: [id])
+
+  @@unique([battleId, participantId, roundNumber])
+  @@map("battle_rounds")
+}
+
+// ==================== TRANSACTIONS ====================
+model Transaction {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+
+  type            String   // deposit/withdrawal/battle_entry/battle_win/case_open/case_win/bonus/rakeback
+  amount          Decimal  @db.Decimal(18, 2)
+
+  referenceType   String?  @map("reference_type")
+  referenceId     String?  @map("reference_id")
+
+  status          String   @default("completed") // pending/completed/failed/cancelled
+
+  description     String?
+  metadata        Json?
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("transactions")
+}
+
+// ==================== CRYPTO DEPOSITS ====================
+model CryptoDeposit {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+
+  paymentId       String?  @unique @map("payment_id")
+  paymentStatus   String?  @map("payment_status")
+
+  payAddress      String?  @map("pay_address")
+  payCurrency     String?  @map("pay_currency")
+  payAmount       Decimal? @map("pay_amount") @db.Decimal(18, 8)
+
+  priceCurrency   String   @default("USD") @map("price_currency")
+  priceAmount     Decimal  @map("price_amount") @db.Decimal(18, 2)
+
+  actuallyPaid    Decimal  @default(0) @map("actually_paid") @db.Decimal(18, 8)
+
+  coinsCredited   Decimal  @default(0) @map("coins_credited") @db.Decimal(18, 2)
+  creditedAt      DateTime? @map("credited_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  expiresAt       DateTime? @map("expires_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("crypto_deposits")
+}
+
+// ==================== SKIN WITHDRAWALS ====================
+model SkinWithdrawal {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+
+  coinAmount      Decimal  @map("coin_amount") @db.Decimal(18, 2)
+
+  waxpeerItemId   String?  @map("waxpeer_item_id")
+  skinName        String?  @map("skin_name")
+  tradeLink       String   @map("trade_link")
+
+  status          String   @default("pending") // pending/processing/sent/completed/failed/cancelled
+  waxpeerTradeId  String?  @map("waxpeer_trade_id")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+  processedAt     DateTime? @map("processed_at")
+  completedAt     DateTime? @map("completed_at")
+
+  errorMessage    String?  @map("error_message")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("skin_withdrawals")
+}
+
+// ==================== USER SEEDS ====================
+model UserSeed {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+
+  serverSeed      String   @map("server_seed")
+  serverSeedHash  String   @map("server_seed_hash")
+  clientSeed      String   @map("client_seed")
+  nonce           Int      @default(0)
+
+  isActive        Boolean  @default(true) @map("is_active")
+  revealedAt      DateTime? @map("revealed_at")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("user_seeds")
+}
+
+// ==================== CHAT MESSAGES ====================
+model ChatMessage {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  room            String   @default("global")
+  message         String
+
+  isDeleted       Boolean  @default(false) @map("is_deleted")
+  deletedById     String?  @map("deleted_by")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@map("chat_messages")
+}
