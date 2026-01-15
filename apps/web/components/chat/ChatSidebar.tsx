@@ -18,7 +18,7 @@ interface ChatMessage {
     vipTier: string;
   };
   message: string;
-  createdAt: string;
+  createdAt: Date | string;
 }
 
 interface ChatSidebarProps {
@@ -63,18 +63,18 @@ export function ChatSidebar({ isOpen, onToggle }: ChatSidebarProps) {
       setOnlineCount(data.count);
     };
 
-    socket.on('chat:message', handleNewMessage);
-    socket.on('chat:history', handleHistory);
-    socket.on('chat:onlineCount', handleOnlineCount);
+    (socket as any).on('chat:message', handleNewMessage);
+    (socket as any).on('chat:history', handleHistory);
+    (socket as any).on('chat:onlineCount', handleOnlineCount);
 
     // Join room
-    socket.emit('chat:join', { room: currentRoom });
+    (socket as any).emit('chat:join', { room: currentRoom });
 
     return () => {
-      socket.off('chat:message', handleNewMessage);
-      socket.off('chat:history', handleHistory);
-      socket.off('chat:onlineCount', handleOnlineCount);
-      socket.emit('chat:leave', { room: currentRoom });
+      (socket as any).off('chat:message', handleNewMessage);
+      (socket as any).off('chat:history', handleHistory);
+      (socket as any).off('chat:onlineCount', handleOnlineCount);
+      (socket as any).emit('chat:leave', { room: currentRoom });
     };
   }, [socket, currentRoom]);
 
@@ -82,7 +82,7 @@ export function ChatSidebar({ isOpen, onToggle }: ChatSidebarProps) {
     if (!socket || !inputValue.trim() || !isAuthenticated || sending) return;
 
     setSending(true);
-    socket.emit('chat:send', {
+    (socket as any).emit('chat:send', {
       room: currentRoom,
       message: inputValue.trim(),
     });

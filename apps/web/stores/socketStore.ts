@@ -122,7 +122,7 @@ export const useSocketStore = create<SocketState>((set, get) => ({
   emit: (event, data) => {
     const { socket } = get();
     if (socket?.connected) {
-      socket.emit(event, data as never);
+      (socket as any).emit(event, data);
     }
   },
 }));
