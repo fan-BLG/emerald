@@ -178,7 +178,7 @@ export const caseRoutes: FastifyPluginAsync = async (fastify) => {
     // Calculate cumulative odds for items
     const totalWeight = caseData.items.reduce((sum, item) => sum + item.oddsWeight, 0);
     let cumulative = 0;
-    const itemsWithCumulative = caseData.items.map((item) => {
+    const itemsWithCumulative = caseData.items.map((item: any) => {
       cumulative += item.oddsWeight / totalWeight;
       return { ...item, cumulative };
     });
@@ -196,7 +196,7 @@ export const caseRoutes: FastifyPluginAsync = async (fastify) => {
         nonce
       );
 
-      const wonItem = rollToItem(rollResult.rollValue, itemsWithCumulative);
+      const wonItem = rollToItem(rollResult.rollValue, itemsWithCumulative) as any;
       totalWinnings += Number(wonItem.coinValue);
 
       results.push({
@@ -280,7 +280,7 @@ export const caseRoutes: FastifyPluginAsync = async (fastify) => {
     for (const result of results) {
       if (result.item.coinValue >= bigWinThreshold) {
         io.emit('global:bigWin', {
-          odId: oderId,
+          odId: user.id,
           username: user.username,
           game: 'case',
           item: { name: result.item.name, value: result.item.coinValue },

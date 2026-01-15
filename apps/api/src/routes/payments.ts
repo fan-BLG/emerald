@@ -71,7 +71,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json() as any;
         console.error('NOWPayments error:', error);
         return reply.code(500).send({
           success: false,
@@ -79,7 +79,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const paymentData = await response.json();
+      const paymentData = await response.json() as any;
 
       // Store deposit in database
       const deposit = await prisma.cryptoDeposit.create({
@@ -264,7 +264,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const data = await response.json();
+      const data = await response.json() as any;
 
       return {
         success: true,
@@ -325,7 +325,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const itemData = await itemResponse.json();
+      const itemData = await itemResponse.json() as any;
       const itemPrice = (itemData.price || 0) / 1000; // Convert from cents
 
       // Check balance
@@ -388,7 +388,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
       });
 
       if (tradeResponse.ok) {
-        const tradeData = await tradeResponse.json();
+        const tradeData = await tradeResponse.json() as any;
         await prisma.skinWithdrawal.update({
           where: { id: withdrawal.id },
           data: {

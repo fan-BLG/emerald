@@ -146,7 +146,7 @@ export class BattleService {
       });
 
       // Calculate cumulative odds for this case
-      const itemsWithOdds = calculateCumulativeOdds(battleCase.case.items);
+      const itemsWithOdds = calculateCumulativeOdds(battleCase.case.items as any);
 
       // Generate results for each player
       const roundResults: {
@@ -177,7 +177,7 @@ export class BattleService {
         );
 
         // Determine won item
-        const wonItem = rollToItem(result.rollValue, itemsWithOdds);
+        const wonItem = rollToItem(result.rollValue, itemsWithOdds) as any;
         const coinValue = Number(wonItem.coinValue);
 
         // Check for Emerald Spin
@@ -400,7 +400,7 @@ export class BattleService {
     const winner = winnerParticipant
       ? {
           position: winnerParticipant.position,
-          odId: winnerParticipant.user.id,
+          userId: winnerParticipant.user.id,
           username: winnerParticipant.user.username,
           totalValue: winnerTotal,
         }

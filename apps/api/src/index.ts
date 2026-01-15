@@ -5,7 +5,6 @@ import rateLimit from '@fastify/rate-limit';
 import { Server } from 'socket.io';
 import { createServer } from 'http';
 import { PrismaClient } from '@prisma/client';
-import type { ServerToClientEvents, ClientToServerEvents } from '@emerald/shared';
 
 // Import routes
 import { authRoutes } from './routes/auth.js';
@@ -49,7 +48,7 @@ const fastify = Fastify({
 const httpServer = createServer(fastify.server);
 
 // Initialize Socket.IO with polling fallback for Railway
-export const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+export const io = new Server(httpServer, {
   cors: {
     origin: process.env.FRONTEND_URL,
     methods: ['GET', 'POST'],
@@ -160,11 +159,11 @@ declare module 'fastify' {
     prisma: PrismaClient;
     authenticate: (request: any, reply: any) => Promise<void>;
   }
-  interface FastifyRequest {
-    user?: {
-      id: string;
-      steamId: string;
-      username: string;
-    };
+}
+
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    payload: { id: string; steamId: string; username: string };
+    user: { id: string; steamId: string; username: string };
   }
 }
