@@ -7,12 +7,22 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:web": "npm run dev -w apps/web",
-    "dev:api": "npm run dev -w apps/api",
-    "build": "npm run build -w apps/web && npm run build -w apps/api",
-    "db:migrate": "npm run db:migrate -w apps/api",
-    "db:seed": "npm run db:seed -w apps/api"
+    "dev": "concurrently \"pnpm run dev:api\" \"pnpm run dev:web\"",
+    "dev:web": "pnpm --filter @emerald/web dev",
+    "dev:api": "pnpm --filter @emerald/api dev",
+    "build": "pnpm --filter @emerald/web build && pnpm --filter @emerald/api build",
+    "db:generate": "pnpm --filter @emerald/api db:generate",
+    "db:migrate": "pnpm --filter @emerald/api db:migrate",
+    "db:push": "pnpm --filter @emerald/api db:push",
+    "db:seed": "pnpm --filter @emerald/api db:seed"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
