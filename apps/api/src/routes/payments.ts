@@ -195,7 +195,7 @@ export async function paymentRoutes(fastify: FastifyInstance) {
     });
 
     // Credit user if payment is confirmed
-    if (paymentStatus === 'finished' && deposit.coinsCredited === 0n) {
+    if (paymentStatus === 'finished' && Number(deposit.coinsCredited) === 0) {
       const coinsToCredit = Number(deposit.priceAmount);
 
       await prisma.$transaction(async (tx) => {

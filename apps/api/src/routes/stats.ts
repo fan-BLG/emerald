@@ -30,7 +30,7 @@ export async function statsRoutes(fastify: FastifyInstance) {
       const recentBattles = await prisma.battle.count({
         where: {
           status: 'finished',
-          updatedAt: { gte: oneDayAgo },
+          finishedAt: { gte: oneDayAgo },
         },
       });
 
